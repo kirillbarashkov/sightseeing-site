@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Sightseeing | Vercel Style</title><link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script><style>body { font-family: 'Geist', system-ui, -apple-system, sans-serif; color: #171717; background-color: #ffffff; -webkit-font-smoothing: antialiased; }.vercel-card { background: #ffffff; box-shadow: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, #fafafa 0px 0px 0px 1px; transition: all 0.2s ease; }.vercel-card:hover { box-shadow: rgba(0,0,0,0.12) 0px 0px 0px 1px, rgba(0,0,0,0.08) 0px 4px 4px; }.title-compressed { letter-spacing: -0.96px; font-weight: 600; }.pill-badge { background-color: #ebf5ff; color: #0068d6; font-size: 12px; font-weight: 500; border-radius: 9999px; }.modal-backdrop { background-color: hsla(0, 0%, 98%, 1); backdrop-filter: blur(4px); }</style></head><body class="py-16 px-4"><div class="max-w-4xl mx-auto"><header class="mb-20 text-center"><h1 class="text-5xl font-semibold mb-4" style="letter-spacing: -2.4px; font-weight: 600;">🗺️ Классные места</h1><p class="text-slate-500 text-lg">Курируемый список направлений для будущих путешествий</p></header><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="vercel-card p-6 rounded-lg cursor-pointer" onclick="showPlace('Калининград")"><div class="flex justify-between items-start mb-3"><h2 class="text-xl title-compressed">Калининград</h2><span class="pill-badge px-2 py-0.5">Город</span></div><p class="text-slate-500 text-sm line-clamp-2 mb-4"># Калининград
+
+## 📝 Описание
+Нужно подобрать варианты маршрутов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Пр...</p><div class="flex gap-3 text-[11px] font-medium text-slate-400 uppercase tracking-wider"><span>📍 None</span><span>⭐ Nice to have</span></div></div><div class="vercel-card p-6 rounded-lg cursor-pointer" onclick="showPlace('Курилы")"><div class="flex justify-between items-start mb-3"><h2 class="text-xl title-compressed">Курилы</h2><span class="pill-badge px-2 py-0.5">Природа</span></div><p class="text-slate-500 text-sm line-clamp-2 mb-4"># Курилы
+
+## 📝 Описание
+Исследование Курильских островов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Проверить...</p><div class="flex gap-3 text-[11px] font-medium text-slate-400 uppercase tracking-wider"><span>📍 None</span><span>⭐ Must visit</span></div></div><div class="vercel-card p-6 rounded-lg cursor-pointer" onclick="showPlace('Мурманск")"><div class="flex justify-between items-start mb-3"><h2 class="text-xl title-compressed">Мурманск</h2><span class="pill-badge px-2 py-0.5">Природа</span></div><p class="text-slate-500 text-sm line-clamp-2 mb-4"># Мурманск
+
+## 📝 Описание
+Купание с китами и северное сияние. Поиск вариантов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный ма...</p><div class="flex gap-3 text-[11px] font-medium text-slate-400 uppercase tracking-wider"><span>📍 None</span><span>⭐ Must visit</span></div></div><div class="vercel-card p-6 rounded-lg cursor-pointer" onclick="showPlace('Сахалин")"><div class="flex justify-between items-start mb-3"><h2 class="text-xl title-compressed">Сахалин</h2><span class="pill-badge px-2 py-0.5">Природа</span></div><p class="text-slate-500 text-sm line-clamp-2 mb-4"># Сахалин
+
+## 📝 Описание
+Поездка на Сахалин через туроператора Kuril Tour.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршру...</p><div class="flex gap-3 text-[11px] font-medium text-slate-400 uppercase tracking-wider"><span>📍 None</span><span>⭐ Must visit</span></div></div><div class="vercel-card p-6 rounded-lg cursor-pointer" onclick="showPlace('Суздаль - Фестиваль шаров")"><div class="flex justify-between items-start mb-3"><h2 class="text-xl title-compressed">Суздаль - Фестиваль шаров</h2><span class="pill-badge px-2 py-0.5">Событие</span></div><p class="text-slate-500 text-sm line-clamp-2 mb-4"># Суздаль - Фестиваль шаров
+
+## 📝 Описание
+Фестиваль воздухоплавания «Золотая осень на Золотом кольце». Планируем на сле...</p><div class="flex gap-3 text-[11px] font-medium text-slate-400 uppercase tracking-wider"><span>📍 None</span><span>⭐ Nice to have</span></div></div></div></div><div id="modal" class="fixed inset-0 modal-backdrop hidden flex items-center justify-center p-4 z-50"><div class="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-8 relative shadow-2xl" style="box-shadow: rgba(0,0,0,0.1) 0px 20px 25px -5px, rgba(0,0,0,0.1) 0px 8px 10px -6px;"><button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-2xl">&times;</button><div id="modal-content" class="prose prose-slate max-w-none"></div></div></div><script>const data = {'Калининград': `# Калининград
+
+## 📝 Описание
+Нужно подобрать варианты маршрутов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Проверить актуальные цены
+- [ ] Забронировать жилье/тур
+
+## 🚩 Логистика
+- Транспорт: 
+- Проживание: 
+
+## 💰 Бюджет
+- Перелеты: 
+- Экскурсии:`, 'Курилы': `# Курилы
+
+## 📝 Описание
+Исследование Курильских островов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Проверить актуальные цены
+- [ ] Забронировать жилье/тур
+
+## 🚩 Логистика
+- Транспорт: 
+- Проживание: 
+
+## 💰 Бюджет
+- Перелеты: 
+- Экскурсии:`, 'Мурманск': `# Мурманск
+
+## 📝 Описание
+Купание с китами и северное сияние. Поиск вариантов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Проверить актуальные цены
+- [ ] Забронировать жилье/тур
+
+## 🚩 Логистика
+- Транспорт: 
+- Проживание: 
+
+## 💰 Бюджет
+- Перелеты: 
+- Экскурсии:`, 'Сахалин': `# Сахалин
+
+## 📝 Описание
+Поездка на Сахалин через туроператора Kuril Tour.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Проверить актуальные цены
+- [ ] Забронировать жилье/тур
+
+## 🚩 Логистика
+- Транспорт: 
+- Проживание: 
+
+## 💰 Бюджет
+- Перелеты: 
+- Экскурсии:`, 'Суздаль - Фестиваль шаров': `# Суздаль - Фестиваль шаров
+
+## 📝 Описание
+Фестиваль воздухоплавания «Золотая осень на Золотом кольце». Планируем на следующий год.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Проверить актуальные цены
+- [ ] Забронировать жилье/тур
+
+## 🚩 Логистика
+- Транспорт: 
+- Проживание: 
+
+## 💰 Бюджет
+- Перелеты: 
+- Экскурсии:`};const places = [{id: 'Калининград', title: 'Калининград', cat: 'Город', loc: 'None', prio: 'Nice to have', body: '# Калининград
+
+## 📝 Описание
+Нужно подобрать варианты маршрутов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Пр'}, {id: 'Курилы', title: 'Курилы', cat: 'Природа', loc: 'None', prio: 'Must visit', body: '# Курилы
+
+## 📝 Описание
+Исследование Курильских островов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршрут
+- [ ] Проверить'}, {id: 'Мурманск', title: 'Мурманск', cat: 'Природа', loc: 'None', prio: 'Must visit', body: '# Мурманск
+
+## 📝 Описание
+Купание с китами и северное сияние. Поиск вариантов.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный ма'}, {id: 'Сахалин', title: 'Сахалин', cat: 'Природа', loc: 'None', prio: 'Must visit', body: '# Сахалин
+
+## 📝 Описание
+Поездка на Сахалин через туроператора Kuril Tour.
+
+## 📋 Чек-лист
+- [ ] Изучить детальный маршру'}, {id: 'Суздаль - Фестиваль шаров', title: 'Суздаль - Фестиваль шаров', cat: 'Событие', loc: 'None', prio: 'Nice to have', body: '# Суздаль - Фестиваль шаров
+
+## 📝 Описание
+Фестиваль воздухоплавания «Золотая осень на Золотом кольце». Планируем на сле'}];function showPlace(id){const content = data[id] || 'Нет данных'; document.getElementById('modal-content').innerHTML = marked.parse(content); document.getElementById('modal').classList.remove('hidden');}function closeModal(){document.getElementById('modal').classList.add('hidden');}document.addEventListener('keydown', (e) => {if(e.key==='Escape') closeModal();});</script></body></html>
