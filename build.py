@@ -321,6 +321,11 @@ body {
   font-weight: 500;
   white-space: nowrap;
 }
+.badge-quiet {
+  background: var(--wash);
+  color: var(--muted);
+  box-shadow: var(--line) 0 0 0 1px;
+}
 .prio-high { color: #0a72ef; }
 .prio-low  { color: var(--faint); }
 
@@ -362,18 +367,8 @@ body {
 }
 .chip svg { flex: none; color: var(--faint); }
 .chip:hover svg { color: var(--accent-fg); }
-.group { margin-bottom: 36px; }
-.group-title {
-  margin: 0 0 12px;
-  font-family: 'Geist Mono', ui-monospace, monospace;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
 .specs {
-  margin: 0;
+  margin: 0 0 48px;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -504,46 +499,27 @@ def card_html(place) -> str:
 
 
 FACT_FIELDS = (
-    ("Категория", "category"),
     ("Локация", "location"),
     ("Сезон", "best_season"),
     ("Стоимость", "estimated_cost"),
 )
 
-PLAN_FIELDS = (
-    ("Статус", "status"),
-    ("Приоритет", "priority"),
-)
 
+def spec_rows(meta) -> str:
+    """Objective facts about the place, as a flat grid of cards.
 
-def _spec_group(title: str, fields, meta) -> str:
-    """One titled block of attribute cards; omitted entirely when empty."""
+    Unknown values are omitted rather than shown as a placeholder -- an empty
+    cell carries no information and only makes the page look unfinished.
+    """
     cells = []
-    for label, key in fields:
+    for label, key in FACT_FIELDS:
         value = clean(meta.get(key))
         if value is None:
             continue
         cells.append("<div><dt>" + label + "</dt><dd>" + value + "</dd></div>")
     if not cells:
         return ""
-    return (
-        '<section class="group">'
-        '<h2 class="group-title">' + title + "</h2>"
-        '<dl class="specs">' + "".join(cells) + "</dl>"
-        "</section>"
-    )
-
-
-def spec_rows(meta) -> str:
-    """Two groups: objective facts about the place, and my plans for it.
-
-    Unknown values are omitted rather than shown as a placeholder -- an empty
-    cell carries no information and only makes the page look unfinished.
-    """
-    return (
-        _spec_group("О месте", FACT_FIELDS, meta)
-        + _spec_group("Мои планы", PLAN_FIELDS, meta)
-    )
+    return '<dl class="specs">' + "".join(cells) + "</dl>"
 
 
 def link_chips(meta) -> str:
@@ -590,11 +566,13 @@ def detail_page(place) -> str:
     priority = clean(meta.get("priority"))
 
     badges = ""
+    status = clean(meta.get("status"))
+    if status:
+        badges += '<span class="badge badge-quiet">' + status + "</span>"
     if category:
         badges += '<span class="badge">' + category + "</span>"
     if priority:
-        cls = PRIORITY_CLASS.get(str(meta.get("priority", "")).lower(), "")
-        badges += '<span class="badge" style="background:#fafafa;color:#4d4d4d">' + priority + "</span>"
+        badges += '<span class="badge badge-quiet">' + priority + "</span>"
 
     body = (
         '<a class="back" href="../index.html">\u2190 Все места</a>'
