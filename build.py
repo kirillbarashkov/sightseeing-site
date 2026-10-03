@@ -143,10 +143,42 @@ def to_html(body: str) -> str:
 
 
 def excerpt(body: str, limit: int = 160) -> str:
-    """First real paragraph of the note body, as plain text."""
-    text = re.sub(r"^#+ .*$", "", body, flags=re.M)          # drop headings
-    text = re.sub(r"^\s*- \[.\]\s*", "", text, flags=re.M)    # drop checklist
-    text = re.sub(r"^[#>*\-\s]+", "", text, flags=re.M)
+    """First meaningful line of the note, as plain text for a card.
+
+    Skips the leading H1, Obsidian callouts/blockquotes, headings and
+    checklist items so cards never show markup like "[!info]".
+    """
+    candidates = []
+    for raw in body.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(">"):        # callouts and quotes
+            continue
+        if line.startswith("#"):        # headings
+            continue
+        if line.startswith("|"):        # tables
+            continue
+        candidates.append(line)
+
+    text = ""
+    # prefer the explicit description bullet
+    for line in candidates:
+        if re.match(r"^\s*[-*]\s+\*\*Что это", line, flags=re.I):
+            text = line
+            break
+    if not text:
+        for line in candidates:
+            if re.match(r"^\s*[-*]\s*\[[ xX]?\]", line):   # checklist
+                continue
+            text = line
+            break
+
+    text = re.sub(r"^\s*[-*]\s*", "", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)           # bold markers
+    text = re.sub(r"^\s*[^:]{1,30}:\s*", "", text)         # leading "Label:"
+    text = re.sub(r"\[(.+?)\]\((.+?)\)", r"\1", text)      # links
+    text = re.sub(r"<(.+?)>", r"\1", text)                 # autolinks
     text = re.sub(r"\s+", " ", text).strip()
     if not text:
         return ""
