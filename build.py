@@ -108,10 +108,33 @@ def read_note(path: Path):
     }
 
 
+CALLOUT_ICONS = {
+    "info": "\u2139\ufe0f",
+    "note": "\U0001f4dd",
+    "tip": "\U0001f4a1",
+    "hint": "\U0001f4a1",
+    "warning": "\u26a0\ufe0f",
+    "caution": "\u26a0\ufe0f",
+    "danger": "\u26d4",
+    "important": "\u2757",
+    "success": "\u2705",
+    "quote": "\U0001f4ac",
+}
+
+
+def _callout(match):
+    icon = CALLOUT_ICONS.get(match.group(1).lower(), "\U0001f4a1")
+    title = match.group(2).strip()
+    label = icon + (" " + title if title else "")
+    return "> **" + label + "**"
+
+
 def to_html(body: str) -> str:
-    """Markdown body -> HTML, with Obsidian checkboxes turned into glyphs."""
+    """Markdown body -> HTML, with Obsidian checkboxes and callouts handled."""
     # drop the note's own leading H1 -- the page already renders the title
     body = re.sub(r"^\s*#\s+[^\n]*\n?", "", body, count=1)
+    # Obsidian callouts: "> [!info] Title" -> "> **INFO Title**"
+    body = re.sub(r"^>\s*\[!(\w+)\]\s*(.*)$", _callout, body, flags=re.M)
     # strip empty template fields like "- Транспорт: "
     body = re.sub(r"^\s*[-*]\s+[^\n:]+:\s*$\n?", "", body, flags=re.M)
     body = re.sub(r"^(\s*)- \[ \]", lambda m: m.group(1) + "- \u2610", body, flags=re.M)
