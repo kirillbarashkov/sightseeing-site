@@ -129,6 +129,23 @@ def _callout(match):
     return "> **" + label + "**"
 
 
+def _mask_autolinks(markup: str) -> str:
+    """Replace anchors whose text is the raw URL with a short human label."""
+    def repl(match):
+        url = match.group(1)
+        if match.group(2) != url:
+            return match.group(0)
+        rest = re.sub(r"^https?://", "", url)
+        host, _, path = rest.partition("/")
+        segments = [seg for seg in path.split("/") if seg]
+        label = host + ("/\u2026/" + segments[-1] if segments else "")
+        if len(label) > 46:
+            label = label[:43].rstrip("/") + "\u2026"
+        return '<a href="' + url + '">' + html.escape(label) + "</a>"
+
+    return re.sub(r'<a href="([^"]+)">([^<]+)</a>', repl, markup)
+
+
 def to_html(body: str) -> str:
     """Markdown body -> HTML, with Obsidian checkboxes and callouts handled."""
     # drop the note's own leading H1 -- the page already renders the title
@@ -139,7 +156,8 @@ def to_html(body: str) -> str:
     body = re.sub(r"^\s*[-*]\s+[^\n:]+:\s*$\n?", "", body, flags=re.M)
     body = re.sub(r"^(\s*)- \[ \]", lambda m: m.group(1) + "- \u2610", body, flags=re.M)
     body = re.sub(r"^(\s*)- \[[xX]\]", lambda m: m.group(1) + "- \u2611", body, flags=re.M)
-    return md.markdown(body, extensions=["extra", "sane_lists", "nl2br"])
+    markup = md.markdown(body, extensions=["extra", "sane_lists", "nl2br"])
+    return _mask_autolinks(markup)
 
 
 def excerpt(body: str, limit: int = 160) -> str:
@@ -322,7 +340,28 @@ body {
   line-height: 1.15;
   letter-spacing: -2px;
 }
-.detail .badges { display: flex; gap: 8px; margin-bottom: 40px; }
+.detail .badges { display: flex; gap: 8px; margin-bottom: 20px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 40px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: var(--line) 0 0 0 1px, rgba(0,0,0,0.04) 0 1px 1px;
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+.chip:hover {
+  box-shadow: rgba(0,0,0,0.14) 0 0 0 1px, rgba(0,0,0,0.06) 0 4px 8px;
+  transform: translateY(-1px);
+}
+.chip svg { flex: none; color: var(--faint); }
+.chip:hover svg { color: var(--accent-fg); }
 .specs {
   margin: 0 0 48px;
   padding: 0;
@@ -344,6 +383,7 @@ body {
   margin-bottom: 4px;
 }
 .specs dd { margin: 0; font-size: 15px; }
+.specs dd.empty { color: var(--faint); }
 .specs dd a { color: var(--accent-fg); text-decoration: none; }
 .specs dd a:hover { text-decoration: underline; }
 
@@ -453,37 +493,67 @@ def card_html(place) -> str:
     )
 
 
+SPEC_FIELDS = (
+    ("Статус", "status"),
+    ("Приоритет", "priority"),
+    ("Категория", "category"),
+    ("Локация", "location"),
+    ("Сезон", "best_season"),
+    ("Стоимость", "estimated_cost"),
+)
+
+ICON_MAP = (
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>'
+    '<circle cx="12" cy="10" r="3"/></svg>'
+)
+
+ICON_LINK = (
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
+    '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+)
+
+
 def spec_rows(meta) -> str:
-    rows = []
+    """Always render the same set of rows so every place page looks alike.
 
-    def add(label, value, is_link=False):
+    Missing values show an em dash -- an empty cell is honest, an invented
+    one is not.
+    """
+    cells = []
+    for label, key in SPEC_FIELDS:
+        value = clean(meta.get(key))
         if value is None:
-            return
-        if is_link:
-            cell = '<a href="' + value + '" target="_blank" rel="noopener">' + value + "</a>"
+            cells.append('<div><dt>' + label + '</dt><dd class="empty">\u2014</dd></div>')
         else:
-            cell = value
-        rows.append("<div><dt>" + label + "</dt><dd>" + cell + "</dd></div>")
+            cells.append("<div><dt>" + label + "</dt><dd>" + value + "</dd></div>")
+    return '<dl class="specs">' + "".join(cells) + "</dl>"
 
-    add("Статус", clean(meta.get("status")))
-    add("Приоритет", clean(meta.get("priority")))
-    add("Категория", clean(meta.get("category")))
-    add("Локация", clean(meta.get("location")))
-    add("Сезон", clean(meta.get("best_season")))
-    add("Стоимость", clean(meta.get("estimated_cost")))
 
+def link_chips(meta) -> str:
+    """Masked, clickable link pills -- never a raw URL on the page."""
     links = meta.get("links") or {}
-    if isinstance(links, dict):
-        site = links.get("site")
-        maps = links.get("maps")
-        if site:
-            add("Сайт", html.escape(str(site).strip()), is_link=True)
-        if maps:
-            add("Карта", html.escape(str(maps).strip()), is_link=True)
-
-    if not rows:
+    if not isinstance(links, dict):
         return ""
-    return '<dl class="specs">' + "".join(rows) + "</dl>"
+    chips = []
+    site = clean(links.get("site"))
+    maps = clean(links.get("maps"))
+    if site:
+        chips.append(
+            '<a class="chip" href="' + site + '" target="_blank" rel="noopener">'
+            + ICON_LINK + "<span>Сайт</span></a>"
+        )
+    if maps:
+        chips.append(
+            '<a class="chip" href="' + maps + '" target="_blank" rel="noopener">'
+            + ICON_MAP + "<span>Карта</span></a>"
+        )
+    if not chips:
+        return ""
+    return '<div class="actions">' + "".join(chips) + "</div>"
 
 
 def detail_page(place) -> str:
@@ -504,6 +574,7 @@ def detail_page(place) -> str:
         '<article class="detail">'
         "<h1>" + title + "</h1>"
         '<div class="badges">' + badges + "</div>"
+        + link_chips(meta)
         + spec_rows(meta) +
         '<div class="prose">' + to_html(place["body"]) + "</div>"
         "</article>"
