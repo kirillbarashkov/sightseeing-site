@@ -362,18 +362,29 @@ body {
 }
 .chip svg { flex: none; color: var(--faint); }
 .chip:hover svg { color: var(--accent-fg); }
+.group { margin-bottom: 36px; }
+.group-title {
+  margin: 0 0 12px;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
 .specs {
-  margin: 0 0 48px;
+  margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1px;
-  background: var(--line);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.specs > div {
+  padding: 12px 16px;
   border-radius: 8px;
-  overflow: hidden;
+  background: var(--wash);
   box-shadow: var(--line) 0 0 0 1px;
 }
-.specs div { padding: 14px 18px; background: var(--surface); }
 .specs dt {
   font-family: 'Geist Mono', ui-monospace, monospace;
   font-size: 11px;
@@ -383,7 +394,6 @@ body {
   margin-bottom: 4px;
 }
 .specs dd { margin: 0; font-size: 15px; }
-.specs dd.empty { color: var(--faint); }
 .specs dd a { color: var(--accent-fg); text-decoration: none; }
 .specs dd a:hover { text-decoration: underline; }
 
@@ -493,44 +503,47 @@ def card_html(place) -> str:
     )
 
 
-SPEC_FIELDS = (
-    ("Статус", "status"),
-    ("Приоритет", "priority"),
+FACT_FIELDS = (
     ("Категория", "category"),
     ("Локация", "location"),
     ("Сезон", "best_season"),
     ("Стоимость", "estimated_cost"),
 )
 
-ICON_MAP = (
-    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-    'stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>'
-    '<circle cx="12" cy="10" r="3"/></svg>'
+PLAN_FIELDS = (
+    ("Статус", "status"),
+    ("Приоритет", "priority"),
 )
 
-ICON_LINK = (
-    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-    'stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
-    '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
-)
+
+def _spec_group(title: str, fields, meta) -> str:
+    """One titled block of attribute cards; omitted entirely when empty."""
+    cells = []
+    for label, key in fields:
+        value = clean(meta.get(key))
+        if value is None:
+            continue
+        cells.append("<div><dt>" + label + "</dt><dd>" + value + "</dd></div>")
+    if not cells:
+        return ""
+    return (
+        '<section class="group">'
+        '<h2 class="group-title">' + title + "</h2>"
+        '<dl class="specs">' + "".join(cells) + "</dl>"
+        "</section>"
+    )
 
 
 def spec_rows(meta) -> str:
-    """Always render the same set of rows so every place page looks alike.
+    """Two groups: objective facts about the place, and my plans for it.
 
-    Missing values show an em dash -- an empty cell is honest, an invented
-    one is not.
+    Unknown values are omitted rather than shown as a placeholder -- an empty
+    cell carries no information and only makes the page look unfinished.
     """
-    cells = []
-    for label, key in SPEC_FIELDS:
-        value = clean(meta.get(key))
-        if value is None:
-            cells.append('<div><dt>' + label + '</dt><dd class="empty">\u2014</dd></div>')
-        else:
-            cells.append("<div><dt>" + label + "</dt><dd>" + value + "</dd></div>")
-    return '<dl class="specs">' + "".join(cells) + "</dl>"
+    return (
+        _spec_group("О месте", FACT_FIELDS, meta)
+        + _spec_group("Мои планы", PLAN_FIELDS, meta)
+    )
 
 
 def link_chips(meta) -> str:
@@ -554,6 +567,20 @@ def link_chips(meta) -> str:
     if not chips:
         return ""
     return '<div class="actions">' + "".join(chips) + "</div>"
+
+ICON_MAP = (
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>'
+    '<circle cx="12" cy="10" r="3"/></svg>'
+)
+
+ICON_LINK = (
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
+    '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+)
 
 
 def detail_page(place) -> str:
