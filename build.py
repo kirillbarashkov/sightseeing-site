@@ -153,10 +153,30 @@ def _mask_autolinks(markup: str) -> str:
     return re.sub(r'<a href="([^"]+)">([^<]+)</a>', repl, markup)
 
 
+WIKI_LINKS = {}  # note stem -> slug, filled in main() before rendering
+
+
+def _wiki_link(match):
+    """Obsidian [[Note]] / [[Note|Alias]] -> anchor to the published page.
+
+    Links to notes that are not published degrade to plain text, so the site
+    never shows literal double brackets or a dead link.
+    """
+    target = match.group(1).strip()
+    alias = match.group(2)
+    label = (alias or target).strip()
+    slug = WIKI_LINKS.get(target)
+    if slug is None:
+        return label
+    return '<a href="' + slug + '.html">' + html.escape(label) + "</a>"
+
+
 def to_html(body: str) -> str:
     """Markdown body -> HTML, with Obsidian checkboxes and callouts handled."""
     # drop the note's own leading H1 -- the page already renders the title
     body = re.sub(r"^\s*#\s+[^\n]*\n?", "", body, count=1)
+    # Obsidian wiki-links -> real anchors (or plain text when not published)
+    body = re.sub(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]", _wiki_link, body)
     # Obsidian callouts: "> [!info] Title" -> "> **INFO Title**"
     body = re.sub(r"^>\s*\[!(\w+)\]\s*(.*)$", _callout, body, flags=re.M)
     # strip empty template fields like "- Транспорт: "
@@ -645,6 +665,14 @@ def main() -> int:
             place["slug"] = base + "-" + str(seen[base])
         else:
             seen[base] = 1
+
+    # wiki-link targets: note stem and title -> published slug
+    WIKI_LINKS.clear()
+    for place in places:
+        WIKI_LINKS[place["stem"]] = place["slug"]
+        title = place["meta"].get("title")
+        if title:
+            WIKI_LINKS[str(title).strip()] = place["slug"]
 
     order = {"must visit": 0, "nice to have": 1}
     places.sort(key=lambda p: (
