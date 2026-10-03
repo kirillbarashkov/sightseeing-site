@@ -507,6 +507,7 @@ def card_html(place) -> str:
 
 FACT_FIELDS = (
     ("Локация", "location"),
+    ("Перелёт", "flight_cost"),
     ("Сезон", "best_season"),
     ("Стоимость", "estimated_cost"),
 )
