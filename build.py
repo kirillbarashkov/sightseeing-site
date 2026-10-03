@@ -78,8 +78,16 @@ def clean(value):
     return html.escape(text)
 
 
+class NoteError(Exception):
+    """Raised when a note is malformed. Aborts the build."""
+
+
 def read_note(path: Path):
-    """Parse one note. Returns a dict for #public notes, else None."""
+    """Parse one note. Returns a dict for #public notes, else None.
+
+    Raises NoteError when the frontmatter is not valid YAML, so a broken note
+    stops the build instead of silently vanishing from the published site.
+    """
     text = path.read_text(encoding="utf-8")
     if not text.lstrip().startswith("---"):
         return None
@@ -90,8 +98,7 @@ def read_note(path: Path):
     try:
         meta = yaml.safe_load(parts[1]) or {}
     except yaml.YAMLError as exc:
-        print("  ! YAML error in %s: %s" % (path.name, exc))
-        return None
+        raise NoteError("YAML error in %s: %s" % (path.name, exc)) from None
 
     tags = meta.get("tags") or []
     if isinstance(tags, str):
@@ -596,6 +603,30 @@ def main() -> int:
         print("Vault not found: " + str(VAULT_PLACES))
         return 1
 
+    # Parse and validate EVERYTHING before touching the output directory, so a
+    # broken note aborts the build instead of silently dropping a place from
+    # the published site.
+    places = []
+    skipped = []
+    errors = []
+    for note in sorted(VAULT_PLACES.glob("*.md")):
+        try:
+            parsed = read_note(note)
+        except NoteError as exc:
+            errors.append(str(exc))
+            continue
+        if parsed is None:
+            skipped.append(note.name)
+            continue
+        parsed["slug"] = slugify(parsed["stem"])
+        places.append(parsed)
+
+    if errors:
+        print("BUILD ABORTED -- nothing was written. Fix these notes:")
+        for message in errors:
+            print("  ! " + message)
+        return 2
+
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "places").mkdir(parents=True)
@@ -603,16 +634,6 @@ def main() -> int:
 
     (OUT / "assets" / "style.css").write_text(STYLE, encoding="utf-8")
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
-
-    places = []
-    skipped = []
-    for note in sorted(VAULT_PLACES.glob("*.md")):
-        parsed = read_note(note)
-        if parsed is None:
-            skipped.append(note.name)
-            continue
-        parsed["slug"] = slugify(parsed["stem"])
-        places.append(parsed)
 
     # guard against slug collisions
     seen = {}
@@ -653,7 +674,7 @@ def main() -> int:
     for place in places:
         print("  - " + place["stem"] + "  ->  places/" + place["slug"] + ".html")
     if skipped:
-        print("Skipped (not #public or invalid): " + ", ".join(skipped))
+        print("Not published (no #public tag): " + ", ".join(skipped))
     print("Output: " + str(OUT))
     return 0
 
