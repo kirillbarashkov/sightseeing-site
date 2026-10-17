@@ -678,6 +678,40 @@ body.trip .foot { margin-top: 64px; }
   color: var(--faint);
 }
 
+/* ---------- letter ---------- */
+.trip-letter {
+  margin: 0 0 40px;
+  padding: 30px 34px 28px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 rgba(36, 31, 28, 0.04);
+}
+.trip-letter .letter-body {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 19px;
+  line-height: 1.72;
+  color: var(--ink);
+}
+.trip-letter .letter-body p { margin: 0 0 14px; }
+.trip-letter .letter-body p:last-child { margin-bottom: 0; }
+.trip-letter .letter-body a { color: var(--accent-fg); }
+.trip-letter .sign {
+  margin-top: 20px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 18px;
+  color: var(--muted);
+}
+.day-mood {
+  margin: -4px 0 24px;
+  max-width: 560px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* ---------- day cards ---------- */
 .days-grid {
   display: grid;
@@ -723,8 +757,10 @@ body.trip .foot { margin-top: 64px; }
 }
 .day-card .excerpt {
   margin: 0 0 16px;
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.45;
   color: var(--muted);
 }
 
@@ -1061,9 +1097,9 @@ TRIP_FACT_FIELDS = (
 )
 
 TRIP_LEAD = (
-    "Восемь дней в Москве: встреча в аэропорту, город, три вечера \u2014 "
-    "орган, театр и вода. Всё собрано заранее, чтобы свободное время "
-    "осталось друг для друга."
+    "Восемь дней, из которых я убрал всё лишнее — дорогу, суету и вопросы "
+    "«а что дальше». Останутся город, три вечера и время, которое можно "
+    "провести не спеша."
 )
 
 
@@ -1117,7 +1153,8 @@ def day_label(day) -> str:
 
 
 def day_card(day) -> str:
-    text = clean(day["meta"].get("lead")) or excerpt(day["body"], 120)
+    text = (clean(day["meta"].get("mood")) or clean(day["meta"].get("lead"))
+            or excerpt(day["body"], 120))
     para = ('<p class="excerpt">' + text + "</p>") if text else ""
     day_slots, evening = group_slots(day["slots"])
 
@@ -1140,7 +1177,7 @@ def day_card(day) -> str:
     )
 
 
-def trip_hero(days, venues) -> str:
+def trip_hero(days, venues, lead: str = "") -> str:
     first, last = days[0]["date"], days[-1]["date"]
     if (first.year, first.month) == (last.year, last.month):
         span = ru_date(first) + " \u2014 " + ru_date(last) + " " + str(last.year)
@@ -1153,30 +1190,43 @@ def trip_hero(days, venues) -> str:
 
     facts = (
         "<div><b>" + str(len(days)) + "</b><span>"
-        + plural_word(len(days), "день", "дня", "дней") + "</span></div>"
+        + plural_word(len(days), "день вместе", "дня вместе", "дней вместе") + "</span></div>"
         "<div><b>" + str(len(events)) + "</b><span>"
-        + plural_word(len(events), "событие", "события", "событий") + "</span></div>"
+        + plural_word(len(events), "вечер в городе", "вечера в городе", "вечеров в городе")
+        + "</span></div>"
         "<div><b>" + str(len(hotels)) + "</b><span>"
-        + plural_word(len(hotels), "гостиница", "гостиницы", "гостиниц") + "</span></div>"
+        + plural_word(len(hotels), "адрес в Москве", "адреса в Москве", "адресов в Москве")
+        + "</span></div>"
     )
 
+    text = lead or TRIP_LEAD
     return (
         '<header class="trip-hero">'
         '<div class="eyebrow">' + span + " \u00b7 Москва</div>"
         "<h1>Леночка <em>приезжает</em></h1>"
-        '<p class="lead">' + linkify(TRIP_LEAD) + "</p>"
+        '<p class="lead">' + linkify(text) + "</p>"
         '<div class="trip-facts">' + facts + "</div>"
         "</header>"
     )
 
 
-def trip_index(days, venues) -> str:
+def trip_index(days, venues, intro=None) -> str:
+    lead = raw((intro or {}).get("meta", {}).get("lead"))
+    letter = ""
+    if intro is not None:
+        sign = raw(intro["meta"].get("signature"))
+        letter = (
+            '<section class="trip-letter">'
+            '<div class="letter-body">' + to_html(intro["body"]) + "</div>"
+            + ('<div class="sign">' + html.escape(sign) + "</div>" if sign else "")
+            + "</section>"
+        )
     cards = "".join(day_card(d) for d in days)
     body = (
-        trip_hero(days, venues) +
+        trip_hero(days, venues, lead) + letter +
         '<div class="days-grid">' + cards + "</div>" +
-        '<footer class="foot">Собрано из Obsidian \u00b7 только заметки с тегом #public '
-        "\u00b7 маршруты и ужины дополняются по мере разведки</footer>"
+        '<footer class="foot">Собрано для Леночки \u00b7 ноябрь 2026 '
+        "\u00b7 всё, что меняется, меняется здесь же</footer>"
     )
     return page("Леночка приезжает \u2014 Москва, ноябрь", body, depth=0, active="trip",
                 css=("style.css", "trip.css"), fonts=FONTS_TRIP, body_class="trip")
@@ -1226,6 +1276,8 @@ def trip_day_page(day, total) -> str:
     parts = ['<article class="day-page">']
     parts.append('<div class="eyebrow">' + day_label(day) + "</div>")
     parts.append("<h1>" + (clean(meta.get("title")) or html.escape(day["stem"])) + "</h1>")
+    if raw(meta.get("mood")):
+        parts.append('<p class="day-mood">' + linkify(raw(meta.get("mood"))) + "</p>")
     parts.append('<div class="badges">' + badges + "</div>")
 
     facts = []
@@ -1335,6 +1387,14 @@ def load_trip():
     return days, venues
 
 
+def load_intro():
+    """Optional Intro.md in the trip project: hero lead + the letter on tab 2."""
+    path = VAULT_TRIP / "Intro.md"
+    if not path.is_file():
+        return None
+    return read_note(path)
+
+
 def assign_wiki_links(entries) -> None:
     """note stem and title -> published slug, for wiki-link resolution."""
     WIKI_LINKS.clear()
@@ -1372,6 +1432,7 @@ def main() -> int:
         print("BUILD ABORTED -- nothing was written.")
         print("  ! " + str(exc))
         return 2
+    intro = load_intro()
 
     if not places:
         print("BUILD ABORTED -- no published places found.")
@@ -1426,7 +1487,7 @@ def main() -> int:
 
     # on lenochka.html the day/venue pages live one folder down
     set_prefix("lenochka/")
-    (OUT / "lenochka.html").write_text(trip_index(days, venues), encoding="utf-8")
+    (OUT / "lenochka.html").write_text(trip_index(days, venues, intro), encoding="utf-8")
     set_prefix("")
 
     for venue in venues:
