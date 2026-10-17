@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Sightseeing site builder.
+"""Site builder for the Sightseeing site -- two tabs, one build.
 
-Reads notes tagged #public from the Obsidian vault and produces a static
+Reads notes tagged #public from two Obsidian projects and produces a static
 site in ./site_build:
 
-    index.html              -- grid of cards, one per place
-    places/<slug>.html      -- full detail page per place
-    assets/style.css        -- Vercel-style design system
+    index.html              -- TAB 1: grid of place cards
+    places/<slug>.html      -- one detail page per place
+    lenochka.html           -- TAB 2: "Леночка приезжает" (days in Moscow)
+    lenochka/den-NN.html    -- one page per day
+    lenochka/<slug>.html    -- one page per venue / hotel / restaurant
+    assets/style.css        -- base design system (shared chrome + tab 1)
+    assets/trip.css         -- warm editorial theme for tab 2
     .nojekyll               -- stop GitHub Pages from running Jekyll
 
 Usage:  python build.py
@@ -15,11 +19,13 @@ Usage:  python build.py
 
 from __future__ import annotations
 
+import datetime as dt
 import html
 import re
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 try:
     import yaml
@@ -33,6 +39,9 @@ except ImportError:
 
 
 VAULT_PLACES = Path(r"D:\DataBases\mstr_obs_git\02-Projects\02-Sightseeing\Places")
+VAULT_TRIP = Path(r"D:\DataBases\mstr_obs_git\02-Projects\05-Lenochka-coming")
+TRIP_DAYS = VAULT_TRIP / "Days"
+TRIP_PLACES = VAULT_TRIP / "Places"
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "site_build"
 
@@ -48,6 +57,20 @@ PRIORITY_CLASS = {
     "must visit": "prio-high",
     "nice to have": "prio-low",
 }
+
+MONTHS_GEN = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+]
+
+WEEKDAYS = [
+    "Понедельник", "Вторник", "Среда", "Четверг",
+    "Пятница", "Суббота", "Воскресенье",
+]
+
+# Venue categories that count as "события" in the trip hero.
+EVENT_CATEGORIES = {"концерт", "театр", "круиз", "спектакль"}
+HOTEL_CATEGORIES = {"отель", "гостиница"}
 
 
 # --------------------------------------------------------------------------- #
@@ -76,6 +99,13 @@ def clean(value):
     if not text:
         return None
     return html.escape(text)
+
+
+def raw(value) -> str:
+    """Return a plain stripped string, or '' when empty."""
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 class NoteError(Exception):
@@ -153,22 +183,54 @@ def _mask_autolinks(markup: str) -> str:
     return re.sub(r'<a href="([^"]+)">([^<]+)</a>', repl, markup)
 
 
-WIKI_LINKS = {}  # note stem -> slug, filled in main() before rendering
+WIKI_LINKS = {}   # note stem / title -> slug, rebuilt per section
+LINK_PREFIX = ""  # relative prefix for wiki-link targets on the current page
+
+WIKI_RE = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
+
+
+def set_prefix(value: str) -> None:
+    """Set the relative prefix used for wiki-link targets ('' or 'lenochka/')."""
+    global LINK_PREFIX
+    LINK_PREFIX = value
+
+
+def _link_target(match):
+    """[[Note]] / [[Note|Alias]] -> (label, slug or None)."""
+    target = match.group(1).strip()
+    alias = match.group(2)
+    label = (alias or target).strip()
+    return label, WIKI_LINKS.get(target)
 
 
 def _wiki_link(match):
-    """Obsidian [[Note]] / [[Note|Alias]] -> anchor to the published page.
+    """Obsidian wiki-link -> anchor to the published page.
 
     Links to notes that are not published degrade to plain text, so the site
     never shows literal double brackets or a dead link.
     """
-    target = match.group(1).strip()
-    alias = match.group(2)
-    label = (alias or target).strip()
-    slug = WIKI_LINKS.get(target)
+    label, slug = _link_target(match)
     if slug is None:
         return label
-    return '<a href="' + slug + '.html">' + html.escape(label) + "</a>"
+    return '<a href="' + LINK_PREFIX + slug + '.html">' + html.escape(label) + "</a>"
+
+
+def linkify(text: str) -> str:
+    """Escape plain text but keep [[wiki-links]] as real anchors."""
+    out = []
+    pos = 0
+    for match in WIKI_RE.finditer(text):
+        out.append(html.escape(text[pos:match.start()]))
+        label, slug = _link_target(match)
+        if slug is None:
+            out.append(html.escape(label))
+        else:
+            out.append(
+                '<a href="' + LINK_PREFIX + slug + '.html">' + html.escape(label) + "</a>"
+            )
+        pos = match.end()
+    out.append(html.escape(text[pos:]))
+    return "".join(out)
 
 
 def to_html(body: str) -> str:
@@ -176,11 +238,11 @@ def to_html(body: str) -> str:
     # drop the note's own leading H1 -- the page already renders the title
     body = re.sub(r"^\s*#\s+[^\n]*\n?", "", body, count=1)
     # Obsidian wiki-links -> real anchors (or plain text when not published)
-    body = re.sub(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]", _wiki_link, body)
+    body = WIKI_RE.sub(_wiki_link, body)
     # Obsidian callouts: "> [!info] Title" -> "> **INFO Title**"
     body = re.sub(r"^>\s*\[!(\w+)\]\s*(.*)$", _callout, body, flags=re.M)
     # strip empty template fields like "- Транспорт: "
-    body = re.sub(r"^\s*[-*]\s+[^\n:]+:\s*$\n?", "", body, flags=re.M)
+    body = re.sub(r"^\s*[-*]\s+[^\n:]+:\s*$", "", body, flags=re.M)
     body = re.sub(r"^(\s*)- \[ \]", lambda m: m.group(1) + "- \u2610", body, flags=re.M)
     body = re.sub(r"^(\s*)- \[[xX]\]", lambda m: m.group(1) + "- \u2611", body, flags=re.M)
     markup = md.markdown(body, extensions=["extra", "sane_lists", "nl2br"])
@@ -194,8 +256,8 @@ def excerpt(body: str, limit: int = 160) -> str:
     checklist items so cards never show markup like "[!info]".
     """
     candidates = []
-    for raw in body.splitlines():
-        line = raw.strip()
+    for line_text in body.splitlines():
+        line = line_text.strip()
         if not line:
             continue
         if line.startswith(">"):        # callouts and quotes
@@ -232,8 +294,43 @@ def excerpt(body: str, limit: int = 160) -> str:
     return html.escape(text)
 
 
+def plural_word(n: int, one: str, few: str, many: str) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+        return few
+    return many
+
+
+def plural(n: int) -> str:
+    return plural_word(n, "место", "места", "мест")
+
+
+def as_date(value):
+    """YAML date / string -> date, or None."""
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    if isinstance(value, str) and value.strip():
+        for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d-%m-%Y"):
+            try:
+                return dt.datetime.strptime(value.strip(), fmt).date()
+            except ValueError:
+                continue
+    return None
+
+
+def ru_date(day: dt.date) -> str:
+    return str(day.day) + " " + MONTHS_GEN[day.month - 1]
+
+
+def maps_url(address: str) -> str:
+    return "https://yandex.ru/maps/?text=" + quote(address)
+
+
 # --------------------------------------------------------------------------- #
-# styling
+# styling -- base (shared chrome + tab 1, Vercel-flavoured)
 # --------------------------------------------------------------------------- #
 
 STYLE = """
@@ -261,6 +358,45 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 .wrap { max-width: 960px; margin: 0 auto; }
+
+/* ---------- top navigation (both tabs) ---------- */
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin: 0 0 56px;
+  padding-bottom: 15px;
+  box-shadow: 0 1px 0 0 var(--line);
+}
+.topnav-brand {
+  margin-right: auto;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav-link {
+  position: relative;
+  padding: 2px 0;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav-link:hover { color: var(--ink); }
+.topnav-link.active { color: var(--ink); }
+.topnav-link.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 1.5px;
+  background: var(--accent-fg);
+}
 
 /* ---------- header ---------- */
 .masthead { margin-bottom: 72px; }
@@ -359,7 +495,7 @@ body {
 /* ---------- detail page ---------- */
 .back {
   display: inline-block;
-  margin-bottom: 40px;
+  margin-bottom: 32px;
   color: var(--faint);
   font-size: 14px;
   text-decoration: none;
@@ -466,13 +602,301 @@ body {
   .masthead h1 { font-size: 34px; letter-spacing: -1.6px; }
   .detail h1 { font-size: 30px; letter-spacing: -1.2px; }
   .masthead { margin-bottom: 48px; }
+  .topnav { gap: 16px; margin-bottom: 36px; }
+  .topnav-brand { display: none; }
 }
 """.strip()
 
 
-def page(title: str, body: str, depth: int = 0) -> str:
-    """Wrap content in the shared document shell."""
+# --------------------------------------------------------------------------- #
+# styling -- tab 2: warm paper, with night blocks for the evening
+# --------------------------------------------------------------------------- #
+
+TRIP_STYLE = """
+/* Tab 2: ivory paper + terracotta; graphite night reserved for the evenings. */
+body.trip {
+  --ink: #241f1c;
+  --muted: #6b5f57;
+  --faint: #9a8c82;
+  --line: rgba(36, 31, 28, 0.12);
+  --surface: #ffffff;
+  --canvas: #fbf8f3;
+  --wash: #f5efe7;
+  --accent-bg: #f4e7e0;
+  --accent-fg: #9c4a32;
+  --night: #14161a;
+  --night-ink: #f4efe7;
+  --night-muted: #b9afa2;
+  --gold: #c9a96a;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 64px 24px 110px;
+}
+body.trip .wrap { max-width: 880px; }
+body.trip .topnav { margin-bottom: 44px; }
+body.trip .back { margin-bottom: 28px; }
+body.trip .foot { margin-top: 64px; }
+
+/* ---------- hero ---------- */
+.trip-hero { margin: 0 0 40px; padding-bottom: 38px; box-shadow: 0 1px 0 0 var(--line); }
+.eyebrow {
+  margin-bottom: 18px;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-fg);
+}
+.trip-hero h1 {
+  margin: 0 0 18px;
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 64px;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+.trip-hero h1 em { font-style: italic; color: var(--accent-fg); }
+.trip-hero .lead {
+  margin: 0;
+  max-width: 600px;
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--muted);
+}
+.trip-facts { display: flex; flex-wrap: wrap; gap: 34px; margin-top: 30px; }
+.trip-facts div { display: flex; flex-direction: column; gap: 2px; }
+.trip-facts b {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+.trip-facts span {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ---------- day cards ---------- */
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 18px;
+}
+.day-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 22px 18px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 rgba(36, 31, 28, 0.04);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+/* full-card link sits above the card, real links sit above the link */
+.day-hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.day-card .steps a, .day-card .excerpt a { position: relative; z-index: 2; }
+.day-hit:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 3px; }
+.day-card:hover {
+  box-shadow: inset 0 0 0 1px var(--line), 0 12px 26px rgba(36, 31, 28, 0.11);
+  transform: translateY(-2px);
+}
+.day-card .num {
+  margin-bottom: 10px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent-fg);
+}
+.day-card h2 {
+  margin: 0 0 8px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 400;
+  font-size: 27px;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+}
+.day-card .excerpt {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ---------- slot lists ---------- */
+.steps {
+  list-style: none;
+  margin: auto 0 0;
+  padding: 14px 0 0;
+  box-shadow: 0 -1px 0 0 var(--line);
+}
+.steps li.row { display: flex; gap: 12px; padding: 4px 0; font-size: 13px; color: var(--muted); }
+.steps time {
+  flex: none;
+  min-width: 54px;
+  padding-top: 2px;
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.steps li.evening {
+  display: block;
+  margin: 10px -12px -4px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--night);
+}
+.steps li.evening .row { display: flex; gap: 12px; padding: 3px 0; font-size: 13px; }
+.steps li.evening time { color: var(--gold); }
+.steps li.evening .row span { color: var(--night-ink); }
+.steps li.evening .row span a { color: var(--gold); text-decoration: none; }
+
+/* ---------- day page ---------- */
+.day-page .eyebrow { margin-bottom: 14px; }
+.day-page h1 {
+  margin: 0 0 14px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 400;
+  font-size: 46px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+.day-page .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+.day-page .badges .badge a { color: inherit; text-decoration: none; }
+.day-page .badges .badge a:hover { text-decoration: underline; }
+.timeline { list-style: none; margin: 0 0 40px; padding: 0; }
+.timeline li {
+  display: flex;
+  gap: 18px;
+  padding: 15px 0;
+  box-shadow: 0 1px 0 0 var(--line);
+}
+.timeline time {
+  flex: none;
+  width: 66px;
+  padding-top: 2px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 17px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.timeline .what { font-size: 15.5px; line-height: 1.55; }
+.timeline .what a { color: var(--accent-fg); text-decoration: none; }
+.timeline .what a:hover { text-decoration: underline; }
+
+.evening-block {
+  margin: 0 0 40px;
+  padding: 20px 24px 22px;
+  border-radius: 12px;
+  background: var(--night);
+  color: var(--night-muted);
+}
+.evening-block h2 {
+  margin: 0 0 12px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.evening-block .row { display: flex; gap: 18px; padding: 7px 0; }
+.evening-block time {
+  flex: none;
+  width: 66px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 17px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.evening-block .row span { font-size: 15.5px; line-height: 1.5; color: var(--night-ink); }
+.evening-block .row span a { color: var(--gold); text-decoration: none; }
+.evening-block .row span a:hover { text-decoration: underline; }
+
+.day-page .specs { margin-bottom: 40px; }
+.day-page .specs > div { background: var(--surface); }
+.day-page .prose { margin-bottom: 8px; }
+.day-page .prose h2 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+.day-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 44px;
+  padding-top: 20px;
+  box-shadow: 0 -1px 0 0 var(--line);
+  font-size: 14px;
+}
+.day-nav a { color: var(--faint); text-decoration: none; }
+.day-nav a:hover { color: var(--ink); }
+.day-nav .next { margin-left: auto; text-align: right; }
+
+@media (max-width: 640px) {
+  body.trip { padding: 40px 18px 80px; }
+  .trip-hero h1 { font-size: 40px; }
+  .day-page h1 { font-size: 32px; }
+  .timeline time, .evening-block time { width: 52px; font-size: 15px; }
+  .timeline li, .evening-block .row { gap: 12px; }
+}
+""".strip()
+
+
+# --------------------------------------------------------------------------- #
+# document shell
+# --------------------------------------------------------------------------- #
+
+FONTS_GEIST = (
+    '<link href="https://fonts.googleapis.com/css2?'
+    'family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500'
+    '&display=swap" rel="stylesheet">'
+)
+
+FONTS_TRIP = (
+    '<link href="https://fonts.googleapis.com/css2?'
+    'family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400'
+    '&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">'
+)
+
+NAV_ITEMS = (
+    ("index.html", "Классные места", "places"),
+    ("lenochka.html", "Леночка приезжает", "trip"),
+)
+
+
+def nav_html(depth: int, active: str) -> str:
+    """Two-tab navigation shared by both sections."""
     prefix = "../" * depth
+    links = []
+    for href, label, key in NAV_ITEMS:
+        cls = "topnav-link active" if key == active else "topnav-link"
+        links.append('<a class="' + cls + '" href="' + prefix + href + '">' + label + "</a>")
+    return (
+        '<nav class="topnav">'
+        '<a class="topnav-brand" href="' + prefix + 'index.html">Sightseeing</a>'
+        + "".join(links) +
+        "</nav>"
+    )
+
+
+def page(title: str, body: str, depth: int = 0, active: str = "places",
+         css=("style.css",), fonts: str = FONTS_GEIST, body_class: str = "") -> str:
+    """Wrap content in the shared document shell (nav + section styling)."""
+    prefix = "../" * depth
+    styles = "".join(
+        '<link rel="stylesheet" href="' + prefix + "assets/" + name + '">'
+        for name in css
+    )
+    cls = ' class="' + body_class + '"' if body_class else ""
     return (
         "<!DOCTYPE html>\n"
         '<html lang="ru">\n<head>\n'
@@ -481,19 +905,91 @@ def page(title: str, body: str, depth: int = 0) -> str:
         "<title>" + html.escape(title) + "</title>\n"
         '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
         '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
-        '<link href="https://fonts.googleapis.com/css2?'
-        'family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500'
-        '&display=swap" rel="stylesheet">\n'
-        '<link rel="stylesheet" href="' + prefix + 'assets/style.css">\n'
-        "</head>\n<body>\n<div class=\"wrap\">\n"
+        + fonts + "\n"
+        + styles + "\n"
+        "</head>\n<body" + cls + ">\n<div class=\"wrap\">\n"
+        + nav_html(depth, active) + "\n"
         + body +
         "\n</div>\n</body>\n</html>\n"
     )
 
 
+ICON_MAP = (
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>'
+    '<circle cx="12" cy="10" r="3"/></svg>'
+)
+
+ICON_LINK = (
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
+    '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+)
+
+ICON_TICKET = (
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2'
+    'a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z"/>'
+    '<line x1="13" y1="5" x2="13" y2="19"/></svg>'
+)
+
+CHIP_FIELDS = (
+    ("site", "Сайт", ICON_LINK),
+    ("maps", "Карта", ICON_MAP),
+    ("tickets", "Билеты", ICON_TICKET),
+)
+
+
+def link_chips(meta) -> str:
+    """Masked, clickable link pills -- never a raw URL on the page."""
+    links = meta.get("links") or {}
+    if not isinstance(links, dict):
+        return ""
+    chips = []
+    for key, label, icon in CHIP_FIELDS:
+        value = clean(links.get(key))
+        if not value:
+            continue
+        chips.append(
+            '<a class="chip" href="' + value + '" target="_blank" rel="noopener">'
+            + icon + "<span>" + label + "</span></a>"
+        )
+    if not chips:
+        return ""
+    return '<div class="actions">' + "".join(chips) + "</div>"
+
+
+def spec_rows(meta, fields) -> str:
+    """Objective facts, as a flat grid of cards.
+
+    Unknown values are omitted rather than shown as a placeholder -- an empty
+    cell carries no information and only makes the page look unfinished.
+    """
+    cells = []
+    for label, key in fields:
+        value = clean(meta.get(key))
+        if value is None:
+            continue
+        cells.append("<div><dt>" + label + "</dt><dd>" + value + "</dd></div>")
+    if not cells:
+        return ""
+    return '<dl class="specs">' + "".join(cells) + "</dl>"
+
+
 # --------------------------------------------------------------------------- #
-# page builders
+# tab 1 -- places
 # --------------------------------------------------------------------------- #
+
+FACT_FIELDS = (
+    ("Локация", "location"),
+    ("Перелёт", "flight_cost"),
+    ("Сезон", "best_season"),
+    ("Стоимость", "estimated_cost"),
+)
+
 
 def card_html(place) -> str:
     meta = place["meta"]
@@ -525,68 +1021,6 @@ def card_html(place) -> str:
     )
 
 
-FACT_FIELDS = (
-    ("Локация", "location"),
-    ("Перелёт", "flight_cost"),
-    ("Сезон", "best_season"),
-    ("Стоимость", "estimated_cost"),
-)
-
-
-def spec_rows(meta) -> str:
-    """Objective facts about the place, as a flat grid of cards.
-
-    Unknown values are omitted rather than shown as a placeholder -- an empty
-    cell carries no information and only makes the page look unfinished.
-    """
-    cells = []
-    for label, key in FACT_FIELDS:
-        value = clean(meta.get(key))
-        if value is None:
-            continue
-        cells.append("<div><dt>" + label + "</dt><dd>" + value + "</dd></div>")
-    if not cells:
-        return ""
-    return '<dl class="specs">' + "".join(cells) + "</dl>"
-
-
-def link_chips(meta) -> str:
-    """Masked, clickable link pills -- never a raw URL on the page."""
-    links = meta.get("links") or {}
-    if not isinstance(links, dict):
-        return ""
-    chips = []
-    site = clean(links.get("site"))
-    maps = clean(links.get("maps"))
-    if site:
-        chips.append(
-            '<a class="chip" href="' + site + '" target="_blank" rel="noopener">'
-            + ICON_LINK + "<span>Сайт</span></a>"
-        )
-    if maps:
-        chips.append(
-            '<a class="chip" href="' + maps + '" target="_blank" rel="noopener">'
-            + ICON_MAP + "<span>Карта</span></a>"
-        )
-    if not chips:
-        return ""
-    return '<div class="actions">' + "".join(chips) + "</div>"
-
-ICON_MAP = (
-    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-    'stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>'
-    '<circle cx="12" cy="10" r="3"/></svg>'
-)
-
-ICON_LINK = (
-    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-    'stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
-    '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
-)
-
-
 def detail_page(place) -> str:
     meta = place["meta"]
     title = clean(meta.get("title")) or html.escape(place["stem"])
@@ -608,11 +1042,319 @@ def detail_page(place) -> str:
         "<h1>" + title + "</h1>"
         '<div class="badges">' + badges + "</div>"
         + link_chips(meta)
-        + spec_rows(meta) +
+        + spec_rows(meta, FACT_FIELDS) +
         '<div class="prose">' + to_html(place["body"]) + "</div>"
         "</article>"
     )
-    return page(title + " \u2014 Классные места", body, depth=1)
+    return page(title + " \u2014 Классные места", body, depth=1, active="places")
+
+
+# --------------------------------------------------------------------------- #
+# tab 2 -- the trip
+# --------------------------------------------------------------------------- #
+
+TRIP_FACT_FIELDS = (
+    ("Во сколько", "time"),
+    ("Адрес", "address"),
+    ("Стоимость", "cost"),
+    ("Бронь", "booking"),
+)
+
+TRIP_LEAD = (
+    "Восемь дней в Москве: встреча в аэропорту, город, три вечера \u2014 "
+    "орган, театр и вода. Всё собрано заранее, чтобы свободное время "
+    "осталось друг для друга."
+)
+
+
+def load_slots(day, label) -> list:
+    """Validate and normalise the 'slots' timeline of a day note."""
+    items = day["meta"].get("slots") or []
+    if not isinstance(items, list):
+        raise NoteError("'slots' must be a list in " + label)
+    out = []
+    for item in items:
+        if not isinstance(item, dict) or not raw(item.get("what")):
+            raise NoteError("every slot needs a 'what' in " + label)
+        period = raw(item.get("period") or "day").lower()
+        out.append({
+            "time": raw(item.get("time")),
+            "what": raw(item.get("what")),
+            "period": "evening" if period == "evening" else "day",
+        })
+    return out
+
+
+def group_slots(slots):
+    """Split a timeline into its day part and its evening part."""
+    day = [s for s in slots if s["period"] == "day"]
+    evening = [s for s in slots if s["period"] == "evening"]
+    return day, evening
+
+
+def slot_row(slot, tag_name: str = "li", cls: str = "") -> str:
+    when = clean(slot["time"]) or "&nbsp;"
+    attr = ' class="' + cls + '"' if cls else ""
+    return (
+        "<" + tag_name + attr + "><time>" + when + "</time>"
+        '<span class="what">' + linkify(slot["what"]) + "</span></" + tag_name + ">"
+    )
+
+
+def evening_row(slot) -> str:
+    when = clean(slot["time"]) or "&nbsp;"
+    return (
+        '<div class="row"><time>' + when + "</time>"
+        '<span class="what">' + linkify(slot["what"]) + "</span></div>"
+    )
+
+
+def day_label(day) -> str:
+    return (
+        "День " + "%02d" % day["num"] + " \u00b7 "
+        + day["weekday"].lower() + ", " + ru_date(day["date"])
+    )
+
+
+def day_card(day) -> str:
+    text = clean(day["meta"].get("lead")) or excerpt(day["body"], 120)
+    para = ('<p class="excerpt">' + text + "</p>") if text else ""
+    day_slots, evening = group_slots(day["slots"])
+
+    steps = "".join(slot_row(s, "li", "row") for s in day_slots)
+    if evening:
+        steps += '<li class="evening">' + "".join(evening_row(s) for s in evening) + "</li>"
+
+    # The card is a div with a full-size overlay anchor: a real <a> wrapping the
+    # whole card would make the inner wiki-links nested anchors, which the HTML
+    # parser "fixes" by cloning the card anchor (the page then renders garbage).
+    return (
+        '<div class="day-card">'
+        '<a class="day-hit" href="' + LINK_PREFIX + day["slug"] + '.html"'
+        ' aria-label="' + html.escape(day_label(day)) + '"></a>'
+        '<div class="num">' + day_label(day) + "</div>"
+        "<h2>" + (clean(day["meta"].get("title")) or html.escape(day["stem"])) + "</h2>"
+        + para +
+        '<ul class="steps">' + steps + "</ul>"
+        "</div>"
+    )
+
+
+def trip_hero(days, venues) -> str:
+    first, last = days[0]["date"], days[-1]["date"]
+    if (first.year, first.month) == (last.year, last.month):
+        span = ru_date(first) + " \u2014 " + ru_date(last) + " " + str(last.year)
+    else:
+        span = (ru_date(first) + " " + str(first.year) + " \u2014 "
+                + ru_date(last) + " " + str(last.year))
+
+    events = [v for v in venues if raw(v["meta"].get("category")).lower() in EVENT_CATEGORIES]
+    hotels = [v for v in venues if raw(v["meta"].get("category")).lower() in HOTEL_CATEGORIES]
+
+    facts = (
+        "<div><b>" + str(len(days)) + "</b><span>"
+        + plural_word(len(days), "день", "дня", "дней") + "</span></div>"
+        "<div><b>" + str(len(events)) + "</b><span>"
+        + plural_word(len(events), "событие", "события", "событий") + "</span></div>"
+        "<div><b>" + str(len(hotels)) + "</b><span>"
+        + plural_word(len(hotels), "гостиница", "гостиницы", "гостиниц") + "</span></div>"
+    )
+
+    return (
+        '<header class="trip-hero">'
+        '<div class="eyebrow">' + span + " \u00b7 Москва</div>"
+        "<h1>Леночка <em>приезжает</em></h1>"
+        '<p class="lead">' + linkify(TRIP_LEAD) + "</p>"
+        '<div class="trip-facts">' + facts + "</div>"
+        "</header>"
+    )
+
+
+def trip_index(days, venues) -> str:
+    cards = "".join(day_card(d) for d in days)
+    body = (
+        trip_hero(days, venues) +
+        '<div class="days-grid">' + cards + "</div>" +
+        '<footer class="foot">Собрано из Obsidian \u00b7 только заметки с тегом #public '
+        "\u00b7 маршруты и ужины дополняются по мере разведки</footer>"
+    )
+    return page("Леночка приезжает \u2014 Москва, ноябрь", body, depth=0, active="trip",
+                css=("style.css", "trip.css"), fonts=FONTS_TRIP, body_class="trip")
+
+
+def trip_place_page(venue) -> str:
+    meta = dict(venue["meta"])
+    title = clean(meta.get("title")) or html.escape(venue["stem"])
+    category = clean(meta.get("category"))
+    status = clean(meta.get("status"))
+
+    badges = ""
+    if status:
+        badges += '<span class="badge badge-quiet">' + status + "</span>"
+    if category:
+        badges += '<span class="badge">' + category + "</span>"
+
+    address = raw(meta.get("address"))
+    links = meta.get("links") if isinstance(meta.get("links"), dict) else {}
+    if address and not links.get("maps"):
+        links = dict(links)
+        links["maps"] = maps_url(address)
+        meta["links"] = links
+
+    body = (
+        '<a class="back" href="../lenochka.html">\u2190 Все дни</a>'
+        '<article class="day-page">'
+        "<h1>" + title + "</h1>"
+        '<div class="badges">' + badges + "</div>"
+        + link_chips(meta)
+        + spec_rows(meta, TRIP_FACT_FIELDS) +
+        '<div class="prose">' + to_html(venue["body"]) + "</div>"
+        "</article>"
+    )
+    return page(title + " \u2014 Леночка приезжает", body, depth=1, active="trip",
+                css=("style.css", "trip.css"), fonts=FONTS_TRIP, body_class="trip")
+
+
+def trip_day_page(day, total) -> str:
+    day_slots, evening = group_slots(day["slots"])
+    meta = day["meta"]
+
+    badges = ""
+    if raw(meta.get("hotel")):
+        badges += '<span class="badge">' + linkify(raw(meta.get("hotel"))) + "</span>"
+
+    parts = ['<article class="day-page">']
+    parts.append('<div class="eyebrow">' + day_label(day) + "</div>")
+    parts.append("<h1>" + (clean(meta.get("title")) or html.escape(day["stem"])) + "</h1>")
+    parts.append('<div class="badges">' + badges + "</div>")
+
+    facts = []
+    if raw(meta.get("time")):
+        facts.append(("Когда", raw(meta.get("time"))))
+    if raw(meta.get("hotel")):
+        facts.append(("Гостиница", raw(meta.get("hotel")).strip("[]")))
+    if facts:
+        cells = "".join(
+            "<div><dt>" + label + "</dt><dd>" + html.escape(value) + "</dd></div>"
+            for label, value in facts
+        )
+        parts.append('<dl class="specs">' + cells + "</dl>")
+
+    if day_slots:
+        parts.append('<ul class="timeline">')
+        parts.append("".join(slot_row(s, "li") for s in day_slots))
+        parts.append("</ul>")
+
+    if evening:
+        parts.append('<div class="evening-block"><h2>Вечер</h2>')
+        parts.append("".join(evening_row(s) for s in evening))
+        parts.append("</div>")
+
+    body_html = to_html(day["body"])
+    if body_html.strip():
+        parts.append('<div class="prose">' + body_html + "</div>")
+
+    prev_link = ""
+    if day["num"] > 1:
+        prev = day["prev"]
+        prev_link = ('<a href="' + prev["slug"] + '.html">\u2190 День '
+                     + "%02d" % prev["num"] + "</a>")
+    next_link = ""
+    if day["num"] < total:
+        nxt = day["next"]
+        next_link = ('<a class="next" href="' + nxt["slug"] + '.html">День '
+                     + "%02d" % nxt["num"] + " \u2192</a>")
+    parts.append('<div class="day-nav">' + prev_link + next_link + "</div>")
+    parts.append("</article>")
+
+    return page(day_label(day) + " \u2014 Леночка приезжает", "".join(parts),
+                depth=1, active="trip",
+                css=("style.css", "trip.css"), fonts=FONTS_TRIP, body_class="trip")
+
+
+# --------------------------------------------------------------------------- #
+# loading
+# --------------------------------------------------------------------------- #
+
+def load_places():
+    """Parse every published note of tab 1."""
+    if not VAULT_PLACES.is_dir():
+        raise NoteError("Vault not found: " + str(VAULT_PLACES))
+    places = []
+    skipped = []
+    for note in sorted(VAULT_PLACES.glob("*.md")):
+        parsed = read_note(note)
+        if parsed is None:
+            skipped.append(note.name)
+            continue
+        parsed["slug"] = slugify(raw(parsed["meta"].get("slug")) or parsed["stem"])
+        places.append(parsed)
+    return places, skipped
+
+
+def load_trip():
+    """Parse days and venues of tab 2, days in calendar order."""
+    for folder in (TRIP_DAYS, TRIP_PLACES):
+        if not folder.is_dir():
+            raise NoteError("Trip folder not found: " + str(folder))
+
+    venues = []
+    for note in sorted(TRIP_PLACES.glob("*.md")):
+        parsed = read_note(note)
+        if parsed is None:
+            continue
+        parsed["slug"] = slugify(raw(parsed["meta"].get("slug")) or parsed["stem"])
+        venues.append(parsed)
+
+    days = []
+    for note in sorted(TRIP_DAYS.glob("*.md")):
+        parsed = read_note(note)
+        if parsed is None:
+            continue
+        when = as_date(parsed["meta"].get("date"))
+        if when is None:
+            raise NoteError("day note without a valid 'date': " + note.name)
+        parsed["date"] = when
+        parsed["weekday"] = WEEKDAYS[when.weekday()]
+        parsed["slots"] = load_slots(parsed, note.name)
+        days.append(parsed)
+
+    days.sort(key=lambda d: d["date"])
+    seen = set()
+    for index, day in enumerate(days, start=1):
+        if day["date"] in seen:
+            raise NoteError("two day notes for " + str(day["date"]))
+        seen.add(day["date"])
+        day["num"] = index
+        day["slug"] = raw(day["meta"].get("slug")) or "den-%02d" % index
+
+    for index, day in enumerate(days):
+        day["prev"] = days[index - 1] if index > 0 else None
+        day["next"] = days[index + 1] if index + 1 < len(days) else None
+
+    return days, venues
+
+
+def assign_wiki_links(entries) -> None:
+    """note stem and title -> published slug, for wiki-link resolution."""
+    WIKI_LINKS.clear()
+    for entry in entries:
+        WIKI_LINKS[entry["stem"]] = entry["slug"]
+        title = entry["meta"].get("title")
+        if title:
+            WIKI_LINKS[str(title).strip()] = entry["slug"]
+
+
+def dedupe_slugs(entries) -> None:
+    """Guard against two notes producing the same page path."""
+    seen = {}
+    for entry in entries:
+        base = entry["slug"]
+        if base in seen:
+            seen[base] += 1
+            entry["slug"] = base + "-" + str(seen[base])
+        else:
+            seen[base] = 1
 
 
 # --------------------------------------------------------------------------- #
@@ -620,59 +1362,38 @@ def detail_page(place) -> str:
 # --------------------------------------------------------------------------- #
 
 def main() -> int:
-    if not VAULT_PLACES.is_dir():
-        print("Vault not found: " + str(VAULT_PLACES))
-        return 1
-
     # Parse and validate EVERYTHING before touching the output directory, so a
-    # broken note aborts the build instead of silently dropping a place from
+    # broken note aborts the build instead of silently dropping content from
     # the published site.
-    places = []
-    skipped = []
-    errors = []
-    for note in sorted(VAULT_PLACES.glob("*.md")):
-        try:
-            parsed = read_note(note)
-        except NoteError as exc:
-            errors.append(str(exc))
-            continue
-        if parsed is None:
-            skipped.append(note.name)
-            continue
-        parsed["slug"] = slugify(parsed["stem"])
-        places.append(parsed)
+    try:
+        places, skipped = load_places()
+        days, venues = load_trip()
+    except NoteError as exc:
+        print("BUILD ABORTED -- nothing was written.")
+        print("  ! " + str(exc))
+        return 2
 
-    if errors:
-        print("BUILD ABORTED -- nothing was written. Fix these notes:")
-        for message in errors:
-            print("  ! " + message)
+    if not places:
+        print("BUILD ABORTED -- no published places found.")
+        return 2
+    if not days:
+        print("BUILD ABORTED -- no published trip days found.")
         return 2
 
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "places").mkdir(parents=True)
+    (OUT / "lenochka").mkdir(parents=True)
     (OUT / "assets").mkdir(parents=True)
 
     (OUT / "assets" / "style.css").write_text(STYLE, encoding="utf-8")
+    (OUT / "assets" / "trip.css").write_text(TRIP_STYLE, encoding="utf-8")
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
 
-    # guard against slug collisions
-    seen = {}
-    for place in places:
-        base = place["slug"]
-        if base in seen:
-            seen[base] += 1
-            place["slug"] = base + "-" + str(seen[base])
-        else:
-            seen[base] = 1
-
-    # wiki-link targets: note stem and title -> published slug
-    WIKI_LINKS.clear()
-    for place in places:
-        WIKI_LINKS[place["stem"]] = place["slug"]
-        title = place["meta"].get("title")
-        if title:
-            WIKI_LINKS[str(title).strip()] = place["slug"]
+    # ---- tab 1: places -------------------------------------------------- #
+    dedupe_slugs(places)
+    assign_wiki_links(places)
+    set_prefix("")
 
     order = {"must visit": 0, "nice to have": 1}
     places.sort(key=lambda p: (
@@ -699,21 +1420,33 @@ def main() -> int:
         target = OUT / "places" / (place["slug"] + ".html")
         target.write_text(detail_page(place), encoding="utf-8")
 
-    print("Built " + str(len(places)) + " place(s):")
+    # ---- tab 2: the trip ------------------------------------------------- #
+    dedupe_slugs(days + venues)
+    assign_wiki_links(days + venues)
+
+    # on lenochka.html the day/venue pages live one folder down
+    set_prefix("lenochka/")
+    (OUT / "lenochka.html").write_text(trip_index(days, venues), encoding="utf-8")
+    set_prefix("")
+
+    for venue in venues:
+        target = OUT / "lenochka" / (venue["slug"] + ".html")
+        target.write_text(trip_place_page(venue), encoding="utf-8")
+
+    for day in days:
+        target = OUT / "lenochka" / (day["slug"] + ".html")
+        target.write_text(trip_day_page(day, len(days)), encoding="utf-8")
+
+    print("Tab 1 -- places: " + str(len(places)))
     for place in places:
         print("  - " + place["stem"] + "  ->  places/" + place["slug"] + ".html")
     if skipped:
-        print("Not published (no #public tag): " + ", ".join(skipped))
+        print("  not published (no #public tag): " + ", ".join(skipped))
+    print("Tab 2 -- trip: " + str(len(days)) + " day(s), " + str(len(venues)) + " venue(s)")
+    for day in days:
+        print("  - " + day_label(day) + "  ->  lenochka/" + day["slug"] + ".html")
     print("Output: " + str(OUT))
     return 0
-
-
-def plural(n: int) -> str:
-    if n % 10 == 1 and n % 100 != 11:
-        return "место"
-    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
-        return "места"
-    return "мест"
 
 
 if __name__ == "__main__":
