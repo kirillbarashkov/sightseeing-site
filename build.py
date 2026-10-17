@@ -829,6 +829,16 @@ body.trip .foot { margin-top: 64px; }
   position: relative;
   margin: -22px -22px 16px;
 }
+.card-photo::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 58px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
 .day-card .card-img {
   display: block;
   width: 100%;
