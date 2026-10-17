@@ -618,6 +618,7 @@ body.trip {
   --ink: #241f1c;
   --muted: #6b5f57;
   --faint: #7d6f66;
+  --faint-strong: #74675e;
   --line: rgba(36, 31, 28, 0.12);
   --surface: #ffffff;
   --canvas: #fbf8f3;
@@ -792,6 +793,23 @@ body.trip .foot { margin-top: 64px; }
 .steps li.evening time { color: var(--gold); }
 .steps li.evening .row span { color: var(--night-ink); }
 .steps li.evening .row span a { color: var(--gold); text-decoration: none; }
+.steps li.alone {
+  display: block;
+  margin: 10px -12px -4px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--wash);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.steps li.alone .row { display: flex; gap: 12px; padding: 3px 0; font-size: 13px; }
+.steps li.alone time { color: var(--faint); }
+.steps li.alone .row span {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--muted);
+}
+.steps li.alone .row span a { color: var(--accent-fg); text-decoration: none; }
 
 /* ---------- day page ---------- */
 .day-page .eyebrow { margin-bottom: 14px; }
@@ -854,6 +872,41 @@ body.trip .foot { margin-top: 64px; }
 .evening-block .row span { font-size: 15.5px; line-height: 1.5; color: var(--night-ink); }
 .evening-block .row span a { color: var(--gold); text-decoration: none; }
 .evening-block .row span a:hover { text-decoration: underline; }
+
+.alone-block {
+  margin: 0 0 40px;
+  padding: 20px 24px 22px;
+  border-radius: 12px;
+  background: var(--wash);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+}
+.alone-block h2 {
+  margin: 0 0 12px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint-strong);
+}
+.alone-block .row { display: flex; gap: 18px; padding: 7px 0; }
+.alone-block time {
+  flex: none;
+  width: 66px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 17px;
+  color: var(--faint-strong);
+  font-variant-numeric: tabular-nums;
+}
+.alone-block .row span {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.alone-block .row span a { color: var(--accent-fg); text-decoration: none; }
 
 .day-page .specs { margin-bottom: 40px; }
 .day-page .specs > div { background: var(--surface); }
@@ -1113,19 +1166,25 @@ def load_slots(day, label) -> list:
         if not isinstance(item, dict) or not raw(item.get("what")):
             raise NoteError("every slot needs a 'what' in " + label)
         period = raw(item.get("period") or "day").lower()
+        if period not in ("day", "evening", "alone"):
+            raise NoteError(
+                "slot period must be day|evening|alone in " + label
+                + " (got '" + period + "')"
+            )
         out.append({
             "time": raw(item.get("time")),
             "what": raw(item.get("what")),
-            "period": "evening" if period == "evening" else "day",
+            "period": period,
         })
     return out
 
 
 def group_slots(slots):
-    """Split a timeline into its day part and its evening part."""
+    """Split a timeline into day part, our evenings, and evenings without me."""
     day = [s for s in slots if s["period"] == "day"]
     evening = [s for s in slots if s["period"] == "evening"]
-    return day, evening
+    alone = [s for s in slots if s["period"] == "alone"]
+    return day, evening, alone
 
 
 def slot_row(slot, tag_name: str = "li", cls: str = "") -> str:
@@ -1156,15 +1215,17 @@ def day_card(day) -> str:
     text = (clean(day["meta"].get("mood")) or clean(day["meta"].get("lead"))
             or excerpt(day["body"], 120))
     para = ('<p class="excerpt">' + text + "</p>") if text else ""
-    day_slots, evening = group_slots(day["slots"])
-
-    steps = "".join(slot_row(s, "li", "row") for s in day_slots)
-    if evening:
-        steps += '<li class="evening">' + "".join(evening_row(s) for s in evening) + "</li>"
+    day_slots, evening, alone = group_slots(day["slots"])
 
     # The card is a div with a full-size overlay anchor: a real <a> wrapping the
     # whole card would make the inner wiki-links nested anchors, which the HTML
     # parser "fixes" by cloning the card anchor (the page then renders garbage).
+    steps = "".join(slot_row(s, "li", "row") for s in day_slots)
+    if evening:
+        steps += '<li class="evening">' + "".join(evening_row(s) for s in evening) + "</li>"
+    if alone:
+        steps += '<li class="alone">' + "".join(evening_row(s) for s in alone) + "</li>"
+
     return (
         '<div class="day-card">'
         '<a class="day-hit" href="' + LINK_PREFIX + day["slug"] + '.html"'
@@ -1266,7 +1327,7 @@ def trip_place_page(venue) -> str:
 
 
 def trip_day_page(day, total) -> str:
-    day_slots, evening = group_slots(day["slots"])
+    day_slots, evening, alone = group_slots(day["slots"])
     meta = day["meta"]
 
     badges = ""
@@ -1300,6 +1361,11 @@ def trip_day_page(day, total) -> str:
     if evening:
         parts.append('<div class="evening-block"><h2>Вечер</h2>')
         parts.append("".join(evening_row(s) for s in evening))
+        parts.append("</div>")
+
+    if alone:
+        parts.append('<div class="alone-block"><h2>Вечер без меня</h2>')
+        parts.append("".join(evening_row(s) for s in alone))
         parts.append("</div>")
 
     body_html = to_html(day["body"])
