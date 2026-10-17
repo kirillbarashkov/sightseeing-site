@@ -617,7 +617,7 @@ TRIP_STYLE = """
 body.trip {
   --ink: #241f1c;
   --muted: #6b5f57;
-  --faint: #9a8c82;
+  --faint: #7d6f66;
   --line: rgba(36, 31, 28, 0.12);
   --surface: #ffffff;
   --canvas: #fbf8f3;
