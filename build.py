@@ -825,21 +825,28 @@ body.trip .foot { margin-top: 64px; }
 }
 
 /* ---------- photographs ---------- */
+.card-photo {
+  position: relative;
+  margin: -22px -22px 16px;
+}
 .day-card .card-img {
   display: block;
-  width: calc(100% + 44px);
-  margin: -22px -22px 16px;
+  width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 10px 10px 0 0;
   background: var(--wash);
 }
 .card-credit {
-  margin: -8px 0 14px;
-  font-size: 10.5px;
+  position: absolute;
+  right: 12px;
+  bottom: 9px;
+  font-size: 10px;
   letter-spacing: 0.02em;
-  color: var(--faint);
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
+.card-credit a { color: inherit; }
 .day-cover {
   display: block;
   width: 100%;
@@ -1321,9 +1328,9 @@ def day_card(day) -> str:
     image = prepare_image(day["meta"].get("image"), day["stem"])
     photo = ""
     if image:
-        photo = ('<img class="card-img" src="' + image_src(image)
+        photo = ('<div class="card-photo"><img class="card-img" src="' + image_src(image)
                  + '" alt="" decoding="async">'
-                 + credit_html(day["meta"], "card-credit"))
+                 + credit_html(day["meta"], "card-credit") + "</div>")
 
     return (
         '<div class="day-card">'
