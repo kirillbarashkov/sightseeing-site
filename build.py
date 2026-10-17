@@ -44,6 +44,7 @@ TRIP_DAYS = VAULT_TRIP / "Days"
 TRIP_PLACES = VAULT_TRIP / "Places"
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "site_build"
+TRIP_IMG_OUT = OUT / "lenochka" / "img"   # images copied out of the trip project
 
 TRANSLIT = {
     "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
@@ -327,6 +328,62 @@ def ru_date(day: dt.date) -> str:
 
 def maps_url(address: str) -> str:
     return "https://yandex.ru/maps/?text=" + quote(address)
+
+
+# --------------------------------------------------------------------------- #
+# images: a note names a file inside the trip project, the build copies it out
+# --------------------------------------------------------------------------- #
+
+COPIED_IMAGES = {}   # absolute source path -> published file name
+
+
+def prepare_image(value, label):
+    """Resolve an `image:` field to a published file name (or a remote URL).
+
+    Vault-local images are copied into site_build/lenochka/img so the published
+    site stays self-contained: replacing a photo is one line of YAML.
+    """
+    name = raw(value)
+    if not name:
+        return None
+    if name.startswith(("http://", "https://")):
+        return name
+    src = (VAULT_TRIP / name).resolve()
+    if not src.is_file():
+        raise NoteError("image not found for " + label + ": " + name)
+    if COPIED_IMAGES.get(str(src)) != src.name:
+        TRIP_IMG_OUT.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, TRIP_IMG_OUT / src.name)
+        COPIED_IMAGES[str(src)] = src.name
+    return src.name
+
+
+def image_src(name: str) -> str:
+    if name.startswith(("http://", "https://")):
+        return name
+    return LINK_PREFIX + "img/" + name
+
+
+def credit_html(meta, css_class: str) -> str:
+    credit = raw(meta.get("image_credit"))
+    if not credit:
+        return ""
+    text = html.escape(credit)
+    url = raw(meta.get("image_credit_url"))
+    if url:
+        text = ('<a href="' + html.escape(url)
+                + '" target="_blank" rel="noopener">' + text + "</a>")
+    return '<p class="' + css_class + '">' + text + "</p>"
+
+
+def cover_html(meta, label) -> str:
+    """Wide photo for a day or venue page, with its credit line."""
+    name = prepare_image(meta.get("image"), label)
+    if not name:
+        return ""
+    return ('<img class="day-cover" src="' + image_src(name)
+            + '" alt="" loading="lazy" decoding="async">'
+            + credit_html(meta, "photo-credit"))
 
 
 # --------------------------------------------------------------------------- #
@@ -718,6 +775,7 @@ body.trip .foot { margin-top: 64px; }
 .days-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  align-items: start;   /* a short card must not stretch to its tall neighbour */
   gap: 18px;
 }
 .day-card {
@@ -765,6 +823,39 @@ body.trip .foot { margin-top: 64px; }
   line-height: 1.45;
   color: var(--muted);
 }
+
+/* ---------- photographs ---------- */
+.day-card .card-img {
+  display: block;
+  width: calc(100% + 44px);
+  margin: -22px -22px 16px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 10px 10px 0 0;
+  background: var(--wash);
+}
+.card-credit {
+  margin: -8px 0 14px;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+.day-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 0 0 10px;
+  background: var(--wash);
+}
+.photo-credit {
+  margin: 0 0 30px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+.photo-credit a, .card-credit a { color: inherit; }
 
 /* ---------- slot lists ---------- */
 .steps {
@@ -1227,10 +1318,18 @@ def day_card(day) -> str:
     if alone:
         steps += '<li class="alone">' + "".join(evening_row(s) for s in alone) + "</li>"
 
+    image = prepare_image(day["meta"].get("image"), day["stem"])
+    photo = ""
+    if image:
+        photo = ('<img class="card-img" src="' + image_src(image)
+                 + '" alt="" loading="lazy" decoding="async">'
+                 + credit_html(day["meta"], "card-credit"))
+
     return (
         '<div class="day-card">'
         '<a class="day-hit" href="' + LINK_PREFIX + day["slug"] + '.html"'
         ' aria-label="' + html.escape(day_label(day)) + '"></a>'
+        + photo +
         '<div class="num">' + day_label(day) + "</div>"
         "<h2>" + (clean(day["meta"].get("title")) or html.escape(day["stem"])) + "</h2>"
         + para +
@@ -1318,6 +1417,7 @@ def trip_place_page(venue) -> str:
         '<article class="day-page">'
         "<h1>" + title + "</h1>"
         '<div class="badges">' + badges + "</div>"
+        + cover_html(meta, venue["stem"])
         + link_chips(meta)
         + spec_rows(meta, TRIP_FACT_FIELDS) +
         '<div class="prose">' + to_html(venue["body"]) + "</div>"
@@ -1341,6 +1441,7 @@ def trip_day_page(day, total) -> str:
     if raw(meta.get("mood")):
         parts.append('<p class="day-mood">' + linkify(raw(meta.get("mood"))) + "</p>")
     parts.append('<div class="badges">' + badges + "</div>")
+    parts.append(cover_html(meta, day["stem"]))
 
     facts = []
     if raw(meta.get("time")):
