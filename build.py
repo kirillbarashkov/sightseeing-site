@@ -73,6 +73,32 @@ WEEKDAYS = [
 EVENT_CATEGORIES = {"концерт", "театр", "круиз", "спектакль"}
 HOTEL_CATEGORIES = {"отель", "гостиница"}
 
+# The day schedule lives in the note BODY as a markdown table, so it is visible
+# and editable in Obsidian (its Properties panel cannot render nested objects).
+SCHEDULE_HEADING = "## Расписание"
+SCHEDULE_COLUMNS = ("Время", "Что", "Тип")
+PERIOD_MAP = {
+    "": "day",
+    "день": "day",
+    "day": "day",
+    "вечер": "evening",
+    "evening": "evening",
+    "без меня": "alone",
+    "один": "alone",
+    "одна": "alone",
+    "alone": "alone",
+}
+LINKS_HEADING = "## Ссылки"
+CHIP_LABELS = {
+    "сайт": "site",
+    "site": "site",
+    "карта": "maps",
+    "maps": "maps",
+    "билеты": "tickets",
+    "афиша": "tickets",
+    "tickets": "tickets",
+}
+
 
 # --------------------------------------------------------------------------- #
 # helpers
@@ -1265,27 +1291,199 @@ TRIP_LEAD = (
 )
 
 
-def load_slots(day, label) -> list:
-    """Validate and normalise the 'slots' timeline of a day note."""
-    items = day["meta"].get("slots") or []
-    if not isinstance(items, list):
-        raise NoteError("'slots' must be a list in " + label)
-    out = []
-    for item in items:
-        if not isinstance(item, dict) or not raw(item.get("what")):
-            raise NoteError("every slot needs a 'what' in " + label)
-        period = raw(item.get("period") or "day").lower()
-        if period not in ("day", "evening", "alone"):
+def section_span(body: str, heading: str):
+    """Line range [start, end) of a '## Heading' section, or None."""
+    lines = body.splitlines()
+    target = heading.strip().lower()
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip().lower() == target:
+            start = i
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith("## "):
+            end = i
+            break
+    return start, end
+
+
+def strip_table_section(body: str, heading: str) -> str:
+    """Remove a '## Heading' plus the table under it, and nothing else.
+
+    Cutting to the next '## ' heading would swallow whatever follows the table
+    (a callout, a paragraph) -- and that content is day text, not schedule.
+    """
+    span = section_span(body, heading)
+    if span is None:
+        return body
+    lines = body.splitlines()
+    start, end = span
+    i = start + 1
+    table_end = start + 1
+    while i < end:
+        line = lines[i].strip()
+        if line.startswith("|"):
+            table_end = i + 1
+            i += 1
+            continue
+        if not line:
+            j = i + 1
+            while j < end and not lines[j].strip():
+                j += 1
+            if j < end and lines[j].strip().startswith("|"):
+                table_end = j
+                i = j
+                continue
+            break
+        break
+    cut_from, cut_to = start, table_end
+    while cut_to < end and not lines[cut_to].strip():
+        cut_to += 1
+    while cut_from > 0 and not lines[cut_from - 1].strip():
+        cut_from -= 1
+    return "\n".join(lines[:cut_from] + lines[cut_to:])
+
+
+def strip_list_section(body: str, heading: str) -> str:
+    """Remove a '## Heading' and the list right under it."""
+    span = section_span(body, heading)
+    if span is None:
+        return body
+    lines = body.splitlines()
+    start, end = span
+    i = start + 1
+    while i < end and (not lines[i].strip() or lines[i].lstrip().startswith(("-", "*"))):
+        i += 1
+    cut_from, cut_to = start, i
+    while cut_to < end and not lines[cut_to].strip():
+        cut_to += 1
+    while cut_from > 0 and not lines[cut_from - 1].strip():
+        cut_from -= 1
+    return "\n".join(lines[:cut_from] + lines[cut_to:])
+
+
+def _table_rows(body: str, heading: str, label: str):
+    """Parse one markdown table under `heading`, strictly.
+
+    Returns a list of (cells, line_number) for data rows. Anything that is not
+    a well-formed table row is a hard error: silently skipping a row would drop
+    a plan item from the site.
+    """
+    span = section_span(body, heading)
+    if span is None:
+        raise NoteError(
+            "нет раздела '" + heading + "' in " + label
+            + " -- расписание дня живёт в теле заметки таблицей"
+        )
+    lines = body.splitlines()
+    start, end = span
+    data = []
+    header = None
+    separator = False
+    for i in range(start + 1, end):
+        raw_line = lines[i]
+        line = raw_line.strip()
+        if not line:
+            continue
+        if not line.startswith("|"):
+            # a table ends at the first non-table line; only content *before*
+            # the table is an error
+            if header is not None and separator:
+                break
             raise NoteError(
-                "slot period must be day|evening|alone in " + label
-                + " (got '" + period + "')"
+                label + ":" + str(i + 1) + ": внутри '" + heading
+                + "' может быть только таблица, а тут: " + line[:60]
             )
-        out.append({
-            "time": raw(item.get("time")),
-            "what": raw(item.get("what")),
-            "period": period,
-        })
-    return out
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if header is None:
+            header = cells
+            continue
+        if not separator:
+            if not all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
+                raise NoteError(
+                    label + ":" + str(i + 1)
+                    + ": после шапки таблицы нужна строка-разделитель вида | --- | --- | --- |"
+                )
+            separator = True
+            continue
+        data.append((cells, i + 1))
+    if header is None or not separator:
+        raise NoteError(label + ": таблица в '" + heading + "' пустая или без строки-разделителя")
+    return header, data
+
+
+def parse_schedule(body: str, label: str):
+    """Day schedule table -> slots. Strict: a bad row aborts the build."""
+    header, data = _table_rows(body, SCHEDULE_HEADING, label)
+    if len(header) != 3:
+        raise NoteError(
+            label + ": в шапке таблицы ожидаются три колонки "
+            + " | ".join(SCHEDULE_COLUMNS) + ", а найдено " + str(len(header))
+        )
+    if [c.lower() for c in header] != [c.lower() for c in SCHEDULE_COLUMNS]:
+        raise NoteError(
+            label + ": шапка расписания должна быть '| "
+            + " | ".join(SCHEDULE_COLUMNS) + " |', а тут: | " + " | ".join(header) + " |"
+        )
+    if not data:
+        raise NoteError(label + ": в расписании нет ни одной строки")
+    slots = []
+    for cells, lineno in data:
+        if len(cells) != 3:
+            raise NoteError(
+                label + ":" + str(lineno) + ": в строке расписания должно быть три ячейки "
+                "(Время | Что | Тип), а их " + str(len(cells))
+                + ". Символ '|' внутри текста недопустим"
+            )
+        when, what, period = cells
+        if not what:
+            raise NoteError(label + ":" + str(lineno) + ": пустая колонка 'Что'")
+        if not when:
+            raise NoteError(label + ":" + str(lineno) + ": пустая колонка 'Время'")
+        key = period.lower()
+        if key not in PERIOD_MAP:
+            raise NoteError(
+                label + ":" + str(lineno) + ": незнакомый тип '" + period
+                + "'. Допустимо: день, вечер, без меня (или пусто)"
+            )
+        slots.append({"time": when, "what": what, "period": PERIOD_MAP[key]})
+    return slots
+
+
+def parse_body_links(body: str, label: str):
+    """'## Ссылки' list -> {site|maps|tickets: url}, so links live in the body."""
+    span = section_span(body, LINKS_HEADING)
+    if span is None:
+        return {}
+    lines = body.splitlines()
+    start, end = span
+    links = {}
+    for i in range(start + 1, end):
+        line = lines[i].strip()
+        if not line:
+            continue
+        match = re.match(r"^[-*]\s+\[([^\]]+)\]\(([^)\s]+)\)\s*$", line)
+        if not match:
+            raise NoteError(
+                label + ":" + str(i + 1) + ": в '" + LINKS_HEADING
+                + "' ожидается строка вида '- [Сайт](https://…)', а тут: " + line[:60]
+            )
+        label_text, url = match.group(1).strip(), match.group(2).strip()
+        key = CHIP_LABELS.get(label_text.lower())
+        if key is None:
+            raise NoteError(
+                label + ":" + str(i + 1) + ": подпись ссылки '" + label_text
+                + "' не распознана. Допустимо: Сайт, Карта, Билеты"
+            )
+        if not url.startswith(("http://", "https://")):
+            raise NoteError(label + ":" + str(i + 1) + ": ссылка должна начинаться с http(s): " + url[:60])
+        if key in links:
+            raise NoteError(label + ":" + str(i + 1) + ": ссылка '" + label_text + "' повторяется")
+        links[key] = url
+    return links
 
 
 def group_slots(slots):
@@ -1423,11 +1621,12 @@ def trip_place_page(venue) -> str:
         badges += '<span class="badge">' + category + "</span>"
 
     address = raw(meta.get("address"))
-    links = meta.get("links") if isinstance(meta.get("links"), dict) else {}
+    meta = dict(meta)
+    links = dict(meta.get("links")) if isinstance(meta.get("links"), dict) else {}
+    links.update(parse_body_links(venue["body"], venue["stem"]))
     if address and not links.get("maps"):
-        links = dict(links)
         links["maps"] = maps_url(address)
-        meta["links"] = links
+    meta["links"] = links
 
     body = (
         '<a class="back" href="../lenochka.html">\u2190 Все дни</a>'
@@ -1437,7 +1636,7 @@ def trip_place_page(venue) -> str:
         + cover_html(meta, venue["stem"])
         + link_chips(meta)
         + spec_rows(meta, TRIP_FACT_FIELDS) +
-        '<div class="prose">' + to_html(venue["body"]) + "</div>"
+        '<div class="prose">' + to_html(strip_list_section(venue["body"], LINKS_HEADING)) + "</div>"
         "</article>"
     )
     return page(title + " \u2014 Леночка приезжает", body, depth=1, active="trip",
@@ -1487,7 +1686,7 @@ def trip_day_page(day, total) -> str:
         parts.append("".join(evening_row(s) for s in alone))
         parts.append("</div>")
 
-    body_html = to_html(day["body"])
+    body_html = to_html(strip_table_section(day["body"], SCHEDULE_HEADING))
     if body_html.strip():
         parts.append('<div class="prose">' + body_html + "</div>")
 
@@ -1553,7 +1752,12 @@ def load_trip():
             raise NoteError("day note without a valid 'date': " + note.name)
         parsed["date"] = when
         parsed["weekday"] = WEEKDAYS[when.weekday()]
-        parsed["slots"] = load_slots(parsed, note.name)
+        if parsed["meta"].get("slots"):
+            raise NoteError(
+                "slots в шапке заметки " + note.name
+                + ": расписание переехало в тело, в раздел '" + SCHEDULE_HEADING + "'"
+            )
+        parsed["slots"] = parse_schedule(parsed["body"], note.name)
         days.append(parsed)
 
     days.sort(key=lambda d: d["date"])
