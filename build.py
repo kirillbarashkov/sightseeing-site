@@ -382,7 +382,7 @@ def cover_html(meta, label) -> str:
     if not name:
         return ""
     return ('<img class="day-cover" src="' + image_src(name)
-            + '" alt="" loading="lazy" decoding="async">'
+            + '" alt="" decoding="async">'
             + credit_html(meta, "photo-credit"))
 
 
@@ -1322,7 +1322,7 @@ def day_card(day) -> str:
     photo = ""
     if image:
         photo = ('<img class="card-img" src="' + image_src(image)
-                 + '" alt="" loading="lazy" decoding="async">'
+                 + '" alt="" decoding="async">'
                  + credit_html(day["meta"], "card-credit"))
 
     return (
