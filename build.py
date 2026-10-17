@@ -623,6 +623,7 @@ body.trip {
   --surface: #ffffff;
   --canvas: #fbf8f3;
   --wash: #f5efe7;
+  --wash-deep: #f1eae0;
   --accent-bg: #f4e7e0;
   --accent-fg: #9c4a32;
   --night: #14161a;
@@ -877,7 +878,7 @@ body.trip .foot { margin-top: 64px; }
   margin: 0 0 40px;
   padding: 20px 24px 22px;
   border-radius: 12px;
-  background: var(--wash);
+  background: var(--wash-deep);
   box-shadow: inset 0 0 0 1px var(--line);
   color: var(--muted);
 }
@@ -934,8 +935,8 @@ body.trip .foot { margin-top: 64px; }
   body.trip { padding: 40px 18px 80px; }
   .trip-hero h1 { font-size: 40px; }
   .day-page h1 { font-size: 32px; }
-  .timeline time, .evening-block time { width: 52px; font-size: 15px; }
-  .timeline li, .evening-block .row { gap: 12px; }
+  .timeline time, .evening-block time, .alone-block time { width: 52px; font-size: 15px; }
+  .timeline li, .evening-block .row, .alone-block .row { gap: 12px; }
 }
 """.strip()
 
