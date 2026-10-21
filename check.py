@@ -166,8 +166,17 @@ def check_days() -> None:
             warn(rel, "нет 'mood' — карточка дня останется без строки настроения")
         check_image(rel, meta)
         check_links(rel, body, INDEX, "(в теле дня)")
+        previous_soft = None
         for slot in slots:
             check_links(rel, slot["what"], INDEX, "(в расписании)")
+            if re.search(r"\d", slot["time"]) and not B.EXACT_TIME_RE.match(slot["time"]):
+                warn(rel, "время '" + slot["time"] + "': либо точное ЧЧ:ММ, либо слово "
+                     "(«днём», «после обеда») — половинчатый формат выглядит неряшливо")
+            if not slot["exact"]:
+                if previous_soft == slot["time"].lower():
+                    warn(rel, "две строки подряд с меткой '" + slot["time"]
+                         + "': непонятно, это два разных отрезка или дубль")
+                previous_soft = slot["time"].lower()
 
 
 def check_venues() -> None:

@@ -89,6 +89,9 @@ PERIOD_MAP = {
     "alone": "alone",
 }
 LINKS_HEADING = "## Ссылки"
+# A clock time is a real checkpoint (flight, concert, theatre); anything else
+# ("днём", "после обеда", "к вечеру") is a soft hint and is rendered softer.
+EXACT_TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 CHIP_LABELS = {
     "сайт": "site",
     "site": "site",
@@ -917,6 +920,14 @@ body.trip .foot { margin-top: 64px; }
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
+/* a soft hint ("днём", "после обеда") is a word, not a clock: render it as one */
+.steps time.soft {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
 .steps li.evening {
   display: block;
   margin: 10px -12px -4px;
@@ -968,13 +979,37 @@ body.trip .foot { margin-top: 64px; }
 }
 .timeline time {
   flex: none;
-  width: 66px;
+  width: 96px;
   padding-top: 2px;
+  text-align: right;
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 17px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
+.timeline time.exact { white-space: nowrap; }
+/* a soft hint ("днём", "к вечеру") is a word, not a clock: right-aligned axis,
+   slightly larger and darker than a caption so it reads as a scale */
+.timeline time.soft {
+  width: 96px;
+  font-style: italic;
+  font-size: 15.5px;
+  line-height: 1.3;
+  color: var(--faint-strong);
+  white-space: normal;
+}
+.evening-block time.soft,
+.alone-block time.soft {
+  width: 96px;
+  font-style: italic;
+  font-size: 15.5px;
+  line-height: 1.3;
+  white-space: normal;
+}
+.evening-block time,
+.alone-block time { width: 96px; text-align: right; }
+.evening-block time.exact,
+.alone-block time.exact { white-space: nowrap; }
 .timeline .what { font-size: 15.5px; line-height: 1.55; }
 .timeline .what a { color: var(--accent-fg); text-decoration: none; }
 .timeline .what a:hover { text-decoration: underline; }
@@ -1069,7 +1104,8 @@ body.trip .foot { margin-top: 64px; }
   body.trip { padding: 40px 18px 80px; }
   .trip-hero h1 { font-size: 40px; }
   .day-page h1 { font-size: 32px; }
-  .timeline time, .evening-block time, .alone-block time { width: 52px; font-size: 15px; }
+  .timeline time, .evening-block time, .alone-block time { width: 84px; font-size: 15px; }
+  .timeline time.soft, .evening-block time.soft, .alone-block time.soft { width: 84px; font-size: 14px; }
   .timeline li, .evening-block .row, .alone-block .row { gap: 12px; }
 }
 """.strip()
@@ -1449,7 +1485,12 @@ def parse_schedule(body: str, label: str):
                 label + ":" + str(lineno) + ": незнакомый тип '" + period
                 + "'. Допустимо: день, вечер, без меня (или пусто)"
             )
-        slots.append({"time": when, "what": what, "period": PERIOD_MAP[key]})
+        slots.append({
+            "time": when,
+            "what": what,
+            "period": PERIOD_MAP[key],
+            "exact": bool(EXACT_TIME_RE.match(when)),
+        })
     return slots
 
 
@@ -1494,20 +1535,24 @@ def group_slots(slots):
     return day, evening, alone
 
 
+def _time_tag(when: str, exact: bool) -> str:
+    return '<time class="' + ("exact" if exact else "soft") + '">' + when + "</time>"
+
+
 def slot_row(slot, tag_name: str = "li", cls: str = "") -> str:
     when = clean(slot["time"]) or "&nbsp;"
     attr = ' class="' + cls + '"' if cls else ""
     return (
-        "<" + tag_name + attr + "><time>" + when + "</time>"
-        '<span class="what">' + linkify(slot["what"]) + "</span></" + tag_name + ">"
+        "<" + tag_name + attr + ">" + _time_tag(when, slot.get("exact", True))
+        + '<span class="what">' + linkify(slot["what"]) + "</span></" + tag_name + ">"
     )
 
 
 def evening_row(slot) -> str:
     when = clean(slot["time"]) or "&nbsp;"
     return (
-        '<div class="row"><time>' + when + "</time>"
-        '<span class="what">' + linkify(slot["what"]) + "</span></div>"
+        '<div class="row">' + _time_tag(when, slot.get("exact", True))
+        + '<span class="what">' + linkify(slot["what"]) + "</span></div>"
     )
 
 
