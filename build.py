@@ -76,6 +76,7 @@ HOTEL_CATEGORIES = {"отель", "гостиница"}
 # The day schedule lives in the note BODY as a markdown table, so it is visible
 # and editable in Obsidian (its Properties panel cannot render nested objects).
 SCHEDULE_HEADING = "## Расписание"
+PHOTOS_HEADING = "## Фотографии дня"   # снимки живут в главе «Как это было», не в плане
 SCHEDULE_COLUMNS = ("Время", "Что", "Тип")
 PERIOD_MAP = {
     "": "day",
@@ -1488,6 +1489,16 @@ def section_span(body: str, heading: str):
     return start, end
 
 
+def strip_section(body: str, heading: str) -> str:
+    """Remove a heading and everything under it up to the next '## ' heading."""
+    span = section_span(body, heading)
+    if span is None:
+        return body
+    lines = body.splitlines()
+    start, end = span
+    return "\n".join(lines[:start] + lines[end:]).strip() + "\n"
+
+
 def strip_table_section(body: str, heading: str) -> str:
     """Remove a '## Heading' plus the table under it, and nothing else.
 
@@ -1885,7 +1896,11 @@ def trip_day_page(day, total) -> str:
         parts.append("".join(evening_row(s) for s in alone))
         parts.append("</div>")
 
-    body_html = to_html(strip_table_section(day["body"], SCHEDULE_HEADING))
+    day_body = strip_table_section(day["body"], SCHEDULE_HEADING)
+    # План отвечает на «что будет», кадры без истории ему не нужны — они уходят
+    # в закрывающую страницу, где под каждым снимком стоит рассказ.
+    day_body = strip_section(day_body, PHOTOS_HEADING)
+    body_html = to_html(day_body)
     if body_html.strip():
         parts.append('<div class="prose">' + body_html + "</div>")
 
