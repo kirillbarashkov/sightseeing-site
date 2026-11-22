@@ -488,7 +488,7 @@ body {
   @page { margin: 14mm 12mm 16mm; }
   html, body { background: #fff !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .topnav, .foot, .after-link, .day-hit, .back, .prevnext { display: none !important; }
+  .topnav, .foot, .after-link, .back, .prevnext { display: none !important; }
   .wrap { max-width: none; margin: 0; }
   a { color: inherit; text-decoration: none; }
   .after-photo, .card, .day-card, .timeline li, figure, .evening-block, .alone-block {
@@ -496,6 +496,16 @@ body {
     page-break-inside: avoid;
   }
   h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+  /* Письмо должно уместиться на первой странице вместе с шапкой, а не
+     оставлять вторую страницу с двумя абзацами и пустотой. */
+  .trip-hero { margin-bottom: 20px; }
+  .trip-hero h1 { font-size: 34px; letter-spacing: -1.2px; }
+  .trip-hero .lead { font-size: 15px; }
+  .trip-facts { margin-top: 12px; }
+  .trip-letter { margin-top: 18px; padding: 16px 18px; break-inside: auto; }
+  .trip-letter .letter-body { font-size: 13.2px; line-height: 1.55; }
+  .trip-letter .letter-body p { margin: 0 0 8px; }
+  .days-grid { break-before: page; page-break-before: always; }
   .after-page h2 { break-before: auto; }
   img { max-width: 100% !important; }
 }
@@ -1973,11 +1983,21 @@ def load_trip():
 
 
 def load_intro():
-    """Optional Intro.md in the trip project: hero lead + the letter on tab 2."""
+    """The intro letter in the trip project root: hero lead + the letter on tab 2.
+
+    The note may carry a numeric prefix (01-Intro.md) — the vault numbering moves
+    files around, and looking only for the bare name silently dropped the letter.
+    """
     path = VAULT_TRIP / "Intro.md"
     if not path.is_file():
-        return None
-    return read_note(path)
+        found = sorted(VAULT_TRIP.glob("*Intro*.md"))
+        found = [p for p in found if p.parent == VAULT_TRIP]
+        if not found:
+            return None
+        path = found[0]
+    note = read_note(path)
+    tags = [str(t) for t in (note["meta"].get("tags") or [])]
+    return note if "public" in tags else None
 
 
 def assign_wiki_links(entries) -> None:
