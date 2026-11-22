@@ -483,6 +483,36 @@ body {
   height: 1.5px;
   background: var(--accent-fg);
 }
+.topnav-pdf {
+  margin-left: 18px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--faint);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav-pdf:hover { color: var(--ink); border-color: var(--accent-fg); }
+
+/* ---------- print / PDF ---------- */
+@media print {
+  @page { margin: 14mm 12mm 16mm; }
+  html, body { background: #fff !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .topnav, .foot, .after-link, .day-hit, .back, .prevnext { display: none !important; }
+  .wrap { max-width: none; margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  .after-photo, .card, .day-card, .timeline li, figure, .evening-block, .alone-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+  .after-page h2 { break-before: auto; }
+  img { max-width: 100% !important; }
+}
 
 /* ---------- header ---------- */
 .masthead { margin-bottom: 72px; }
@@ -1197,10 +1227,16 @@ NAV_ITEMS = (
 
 # Closing page «Как это было»: the note is parked (no #public) until the guest
 # sends her words and photos, so the build neither renders it nor links to it.
-AFTER_NOTE = VAULT_TRIP / "Как это было.md"
+AFTER_NOTE = VAULT_TRIP / "Как-это-было" / "Как это было.md"
 AFTER_HREF = "kak-eto-bylo.html"
 AFTER_LABEL = "Как это было"
 AFTER_PRESENT = False
+
+# Printable copies live in the repo (pdf/), never in site_build: the build wipes
+# the output folder, and a PDF must survive a rebuild to stay linkable.
+PDF_DIR = Path(__file__).resolve().parent / "pdf"
+PDF_FILES = {"trip": "lenochka.pdf", "after": "kak-eto-bylo.pdf"}
+PDF_PRESENT = set()
 
 
 def nav_html(depth: int, active: str) -> str:
@@ -1213,10 +1249,14 @@ def nav_html(depth: int, active: str) -> str:
     for href, label, key in items:
         cls = "topnav-link active" if key == active else "topnav-link"
         links.append('<a class="' + cls + '" href="' + prefix + href + '">' + label + "</a>")
+    pdf = ""
+    if active in PDF_PRESENT:
+        pdf = ('<a class="topnav-pdf" href="' + prefix + "pdf/" + PDF_FILES[active]
+               + '" download title="Скачать PDF">PDF</a>')
     return (
         '<nav class="topnav">'
         '<a class="topnav-brand" href="' + prefix + 'index.html">Sightseeing</a>'
-        + "".join(links) +
+        + "".join(links) + pdf +
         "</nav>"
     )
 
@@ -2002,6 +2042,7 @@ def main() -> int:
     after = load_after()
     global AFTER_PRESENT
     AFTER_PRESENT = after is not None
+    PDF_PRESENT.clear()
 
     if not places:
         print("BUILD ABORTED -- no published places found.")
@@ -2015,6 +2056,15 @@ def main() -> int:
     (OUT / "places").mkdir(parents=True)
     (OUT / "lenochka").mkdir(parents=True)
     (OUT / "assets").mkdir(parents=True)
+
+    # printable copies, if they were exported earlier (see export_pdf.py)
+    if PDF_DIR.is_dir():
+        (OUT / "pdf").mkdir()
+        for key, name in PDF_FILES.items():
+            src = PDF_DIR / name
+            if src.is_file():
+                shutil.copy2(src, OUT / "pdf" / name)
+                PDF_PRESENT.add(key)
 
     (OUT / "assets" / "style.css").write_text(STYLE, encoding="utf-8")
     (OUT / "assets" / "trip.css").write_text(TRIP_STYLE, encoding="utf-8")
