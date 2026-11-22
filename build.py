@@ -267,6 +267,8 @@ def to_html(body: str) -> str:
     """Markdown body -> HTML, with Obsidian checkboxes and callouts handled."""
     # drop the note's own leading H1 -- the page already renders the title
     body = re.sub(r"^\s*#\s+[^\n]*\n?", "", body, count=1)
+    # Obsidian embeds ![[файл.jpg]] -> картинка (до WIKI_RE, иначе он съест скобки)
+    body = EMBED_RE.sub(_embed_image, body)
     # Obsidian wiki-links -> real anchors (or plain text when not published)
     body = WIKI_RE.sub(_wiki_link, body)
     # Obsidian callouts: "> [!info] Title" -> "> **INFO Title**"
@@ -277,6 +279,30 @@ def to_html(body: str) -> str:
     body = re.sub(r"^(\s*)- \[[xX]\]", lambda m: m.group(1) + "- \u2611", body, flags=re.M)
     markup = md.markdown(body, extensions=["extra", "sane_lists", "nl2br"])
     return _mask_autolinks(markup)
+
+
+EMBED_RE = re.compile(r"!\[\[([^\]\|]+)(?:\|([^\]]*))?\]\]")
+
+
+def _embed_image(match) -> str:
+    """![[имя.jpg]] или ![[папка/имя.jpg|600]] -> <img class="after-photo">."""
+    target = match.group(1).strip()
+    if not target.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")):
+        return match.group(0)          # не картинка — оставляем как было
+    if re.match(r"^[a-z]+://|^[a-z]+:", target, flags=re.I):
+        return match.group(0)          # внешние ссылки не трогаем
+    src = (VAULT_TRIP / target)
+    if not src.is_file():
+        found = sorted(VAULT_TRIP.rglob(Path(target).name))
+        if not found:
+            return match.group(0)
+        src = found[0]
+    rel = src.resolve().relative_to(VAULT_TRIP.resolve()).as_posix()
+    name = prepare_image(rel, "embed " + target)
+    if not name:
+        return match.group(0)
+    return ('<img class="after-photo" src="' + image_src(name) + '" alt="" '
+            'loading="eager" decoding="async">')
 
 
 def excerpt(body: str, limit: int = 160) -> str:
@@ -382,7 +408,21 @@ def prepare_image(value, label):
         raise NoteError("image not found for " + label + ": " + name)
     if COPIED_IMAGES.get(str(src)) != src.name:
         TRIP_IMG_OUT.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, TRIP_IMG_OUT / src.name)
+        dest = TRIP_IMG_OUT / src.name
+        shipped = False
+        try:                                   # сжать: 40 кадров в PDF и весе страницы
+            from PIL import Image
+            with Image.open(src) as im:
+                if im.width > 1000:
+                    im = im.convert("RGB")
+                    ratio = 1000 / im.width
+                    im = im.resize((1000, int(im.height * ratio)), Image.LANCZOS)
+                    im.save(dest, "JPEG", quality=80, optimize=True)
+                    shipped = True
+        except Exception:
+            shipped = False
+        if not shipped:
+            shutil.copyfile(src, dest)
         COPIED_IMAGES[str(src)] = src.name
     return src.name
 

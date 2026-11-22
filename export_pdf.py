@@ -52,6 +52,17 @@ BUNDLE_CSS = """
     .trip-letter .letter-body { font-size: 13.2px; line-height: 1.55; }
     .trip-letter .letter-body p { margin: 0 0 8px; }
     .days-grid { break-before: page; page-break-before: always; }
+    /* Фотографии в печати — не на весь лист: иначе сорок кадров дают сорок страниц. */
+    .prose img, .after-photo {
+      max-width: 100%;
+      max-height: 96mm;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .after-photo { margin: 8px 0 4px; border-radius: 3px; }
   }
 </style>
 """
@@ -98,9 +109,13 @@ def bundle(main_html: Path, children: list[Path]) -> str:
         markup = re.sub(r'href="([^"]+\.html[^"]*)"', repl, markup)
         return markup
 
-    parts = ['<section class="pdf-section first" id="t-top">' + fix(_wrap_content(main_html.read_text(encoding="utf-8"))) + "</section>"]
+    def prep(markup: str, base_dir: Path) -> str:
+        return absolutize(fix(markup), base_dir).replace('loading="lazy"', 'loading="eager"')
+
+    parts = ['<section class="pdf-section first" id="t-top">'
+             + prep(_wrap_content(main_html.read_text(encoding="utf-8")), main_html.parent) + "</section>"]
     for child in children:
-        body = fix(_wrap_content(child.read_text(encoding="utf-8")))
+        body = prep(_wrap_content(child.read_text(encoding="utf-8")), child.parent)
         parts.append(
             '<section class="pdf-section" id="' + mapping[child.stem] + '">'
             + '<p class="pdf-back"><a href="#t-top">↑ к оглавлению</a></p>'
@@ -111,15 +126,16 @@ def bundle(main_html: Path, children: list[Path]) -> str:
     head = main_html.read_text(encoding="utf-8")
     head = head.split("</head>", 1)[0] + BUNDLE_CSS + "</head>\n<body class=\"trip\">\n<div class=\"wrap\">"
     doc = head + "\n".join(parts) + "\n</div>\n</body>\n</html>\n"
-    return absolutize(doc)
+    return absolutize(doc, BUILD)
 
 
 REL_RE = re.compile(r'(src|href)="((?!https?:|#|file:|mailto:|data:)[^"]+)"')
 
 
-def absolutize(markup: str) -> str:
-    """Сборка печатается из _print/, поэтому относительные пути стали бы битыми."""
-    base = BUILD.as_uri() + "/"
+def absolutize(markup: str, base_dir: Path = BUILD) -> str:
+    """Пути считаются от папки самой страницы: у дней картинки лежат рядом (img/…),
+    у главной — от корня сборки. Иначе в PDF остаются пустые рамки."""
+    base = base_dir.as_uri() + "/"
 
     def repl(match):
         attr, value = match.group(1), match.group(2)
