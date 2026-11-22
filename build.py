@@ -39,7 +39,7 @@ except ImportError:
 
 
 VAULT_PLACES = Path(r"D:\DataBases\mstr_obs_git\02-Projects\02-Sightseeing\Places")
-VAULT_TRIP = Path(r"D:\DataBases\mstr_obs_git\02-Projects\05-Lenochka-coming")
+VAULT_TRIP = Path(r"D:\DataBases\mstr_obs_git\02-Projects\03-Lenochka-coming")
 TRIP_DAYS = VAULT_TRIP / "Days"
 TRIP_PLACES = VAULT_TRIP / "Places"
 ROOT = Path(__file__).resolve().parent
@@ -915,8 +915,8 @@ body.trip .foot { margin-top: 64px; }
   flex: none;
   min-width: 54px;
   padding-top: 2px;
-  font-size: 11.5px;
-  letter-spacing: 0.03em;
+  font-size: 13px;
+  letter-spacing: 0.02em;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
@@ -1006,8 +1006,6 @@ body.trip .foot { margin-top: 64px; }
   line-height: 1.3;
   white-space: normal;
 }
-.evening-block time,
-.alone-block time { width: 96px; text-align: right; }
 .evening-block time.exact,
 .alone-block time.exact { white-space: nowrap; }
 .timeline .what { font-size: 15.5px; line-height: 1.55; }
@@ -1033,7 +1031,8 @@ body.trip .foot { margin-top: 64px; }
 .evening-block .row { display: flex; gap: 18px; padding: 7px 0; }
 .evening-block time {
   flex: none;
-  width: 66px;
+  width: 96px;
+  text-align: right;
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 17px;
   color: var(--gold);
@@ -1063,7 +1062,8 @@ body.trip .foot { margin-top: 64px; }
 .alone-block .row { display: flex; gap: 18px; padding: 7px 0; }
 .alone-block time {
   flex: none;
-  width: 66px;
+  width: 96px;
+  text-align: right;
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 17px;
   color: var(--faint-strong);
@@ -1108,6 +1108,69 @@ body.trip .foot { margin-top: 64px; }
   .timeline time.soft, .evening-block time.soft, .alone-block time.soft { width: 84px; font-size: 14px; }
   .timeline li, .evening-block .row, .alone-block .row { gap: 12px; }
 }
+
+/* ---- closing page: «Как это было» -------------------------------------- */
+.after-hero { max-width: 720px; margin: 0 auto 34px; text-align: center; }
+.after-hero .eyebrow {
+  font-family: "Inter", sans-serif; font-size: 12px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--faint-strong); margin-bottom: 14px;
+}
+.after-hero h1 {
+  font-family: "Cormorant Garamond", Georgia, serif; font-weight: 400;
+  font-size: 54px; line-height: 1.05; margin: 0 0 16px; color: var(--ink);
+}
+.after-hero .lead {
+  font-family: "Cormorant Garamond", Georgia, serif; font-style: italic;
+  font-size: 21px; line-height: 1.5; color: var(--faint-strong); margin: 0;
+}
+.after-page {
+  max-width: 720px; margin: 0 auto; padding: 34px 40px 40px;
+  background: var(--paper); box-shadow: 0 1px 0 0 var(--line), 0 0 0 1px var(--line);
+}
+.after-page h2 {
+  font-family: "Cormorant Garamond", Georgia, serif; font-weight: 500;
+  font-size: 27px; line-height: 1.2; margin: 34px 0 10px; color: var(--ink);
+}
+.after-page h2:first-child { margin-top: 0; }
+.after-page p { font-size: 17px; line-height: 1.72; color: var(--ink-soft); margin: 0 0 14px; }
+.after-page blockquote {
+  margin: 0 0 18px; padding: 2px 0 2px 18px; box-shadow: inset 2px 0 0 0 var(--accent);
+  font-family: "Cormorant Garamond", Georgia, serif; font-style: italic;
+  font-size: 21px; line-height: 1.5; color: var(--ink);
+}
+.after-page ul { margin: 0 0 14px; padding-left: 20px; }
+.after-page li { font-size: 17px; line-height: 1.7; color: var(--ink-soft); margin-bottom: 6px; }
+.after-photo {
+  display: block; width: 100%; height: auto; margin: 22px 0;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.after-page .sign {
+  font-family: "Cormorant Garamond", Georgia, serif; font-style: italic;
+  font-size: 22px; color: var(--faint-strong); margin-top: 26px; text-align: right;
+}
+.after-link {
+  display: block; max-width: 720px; margin: 44px auto 0; padding: 22px 26px;
+  text-decoration: none; color: inherit; background: var(--wash-deep, #f1eae0);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.after-link:hover { box-shadow: 0 0 0 1px var(--accent); }
+.after-link .after-kicker {
+  display: block; font-family: "Inter", sans-serif; font-size: 11px;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--faint-strong);
+  margin-bottom: 6px;
+}
+.after-link .after-title {
+  display: block; font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 26px; line-height: 1.2; color: var(--ink); margin-bottom: 4px;
+}
+.after-link .after-hint {
+  display: block; font-family: "Cormorant Garamond", Georgia, serif;
+  font-style: italic; font-size: 17px; color: var(--faint-strong);
+}
+@media (max-width: 640px) {
+  .after-hero h1 { font-size: 38px; }
+  .after-page { padding: 24px 20px 28px; }
+}
 """.strip()
 
 
@@ -1132,12 +1195,22 @@ NAV_ITEMS = (
     ("lenochka.html", "Леночка приезжает", "trip"),
 )
 
+# Closing page «Как это было»: the note is parked (no #public) until the guest
+# sends her words and photos, so the build neither renders it nor links to it.
+AFTER_NOTE = VAULT_TRIP / "Как это было.md"
+AFTER_HREF = "kak-eto-bylo.html"
+AFTER_LABEL = "Как это было"
+AFTER_PRESENT = False
+
 
 def nav_html(depth: int, active: str) -> str:
     """Two-tab navigation shared by both sections."""
     prefix = "../" * depth
+    items = list(NAV_ITEMS)
+    if AFTER_PRESENT:
+        items.append((AFTER_HREF, AFTER_LABEL, "after"))
     links = []
-    for href, label, key in NAV_ITEMS:
+    for href, label, key in items:
         cls = "topnav-link active" if key == active else "topnav-link"
         links.append('<a class="' + cls + '" href="' + prefix + href + '">' + label + "</a>")
     return (
@@ -1321,9 +1394,9 @@ TRIP_FACT_FIELDS = (
 )
 
 TRIP_LEAD = (
-    "Восемь дней, из которых я убрал всё лишнее — дорогу, суету и вопросы "
-    "«а что дальше». Останутся город, три вечера и время, которое можно "
-    "провести не спеша."
+    "Восемь дней, из которых выкинуто всё лишнее — переезды, суета и вопросы "
+    "«а что дальше». Остаются город, три вечера и двадцать лет дружбы, "
+    "которым ничего не нужно доказывать."
 )
 
 
@@ -1631,7 +1704,7 @@ def trip_hero(days, venues, lead: str = "") -> str:
     )
 
 
-def trip_index(days, venues, intro=None) -> str:
+def trip_index(days, venues, intro=None, after=None) -> str:
     lead = raw((intro or {}).get("meta", {}).get("lead"))
     letter = ""
     if intro is not None:
@@ -1643,9 +1716,21 @@ def trip_index(days, venues, intro=None) -> str:
             + "</section>"
         )
     cards = "".join(day_card(d) for d in days)
+    closing = ""
+    if after is not None:
+        hint = raw(after["meta"].get("hint")) or (
+            "что понравилось, что удивило, куда хочется вернуться"
+        )
+        closing = (
+            '<a class="after-link" href="' + AFTER_HREF + '">'
+            '<span class="after-kicker">Вторая часть</span>'
+            '<span class="after-title">' + AFTER_LABEL + "</span>"
+            '<span class="after-hint">' + html.escape(hint) + "</span>"
+            "</a>"
+        )
     body = (
         trip_hero(days, venues, lead) + letter +
-        '<div class="days-grid">' + cards + "</div>" +
+        '<div class="days-grid">' + cards + "</div>" + closing +
         '<footer class="foot">Собрано для Леночки \u00b7 ноябрь 2026 '
         "\u00b7 всё, что меняется, меняется здесь же</footer>"
     )
@@ -1757,6 +1842,53 @@ def trip_day_page(day, total) -> str:
 # loading
 # --------------------------------------------------------------------------- #
 
+def load_after():
+    """The closing note «Как это было», or None when absent or unpublished."""
+    if not AFTER_NOTE.is_file():
+        return None
+    return read_note(AFTER_NOTE)
+
+
+_AFTER_IMG_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+
+
+def _after_images(markup: str) -> str:
+    """Publish photos referenced from the closing note and inline them."""
+    def repl(match):
+        alt, src = match.group(1), match.group(2)
+        name = prepare_image(src, "photo in " + AFTER_NOTE.name)
+        if not name:
+            return ""
+        return ('<img class="after-photo" src="' + image_src(name) + '" alt="'
+                + html.escape(alt) + '" loading="eager" decoding="async">')
+
+    return _AFTER_IMG_RE.sub(repl, markup)
+
+
+def trip_after_page(note) -> str:
+    """Render «Как это было»: the guest's own words and photos."""
+    meta = note["meta"]
+    title = clean(meta.get("title")) or AFTER_LABEL
+    lead = raw(meta.get("lead"))
+    sign = raw(meta.get("signature"))
+    prose = to_html(_after_images(note["body"]))
+    hero = (
+        '<header class="after-hero">'
+        '<div class="eyebrow">Москва \u00b7 ноябрь 2026</div>'
+        "<h1>" + html.escape(title) + "</h1>"
+        + ('<p class="lead">' + linkify(lead) + "</p>" if lead else "")
+        + "</header>"
+    )
+    sign_html = ('<div class="sign">' + html.escape(sign) + "</div>" if sign else "")
+    body = (
+        '<a class="back" href="lenochka.html">\u2190 План поездки</a>'
+        + hero
+        + '<article class="after-page">' + prose + sign_html + "</article>"
+    )
+    return page(title + " \u2014 Леночка приезжает", body, depth=0, active="after",
+                css=("style.css", "trip.css"), fonts=FONTS_TRIP, body_class="trip")
+
+
 def load_places():
     """Parse every published note of tab 1."""
     if not VAULT_PLACES.is_dir():
@@ -1867,6 +1999,9 @@ def main() -> int:
         print("  ! " + str(exc))
         return 2
     intro = load_intro()
+    after = load_after()
+    global AFTER_PRESENT
+    AFTER_PRESENT = after is not None
 
     if not places:
         print("BUILD ABORTED -- no published places found.")
@@ -1921,8 +2056,11 @@ def main() -> int:
 
     # on lenochka.html the day/venue pages live one folder down
     set_prefix("lenochka/")
-    (OUT / "lenochka.html").write_text(trip_index(days, venues, intro), encoding="utf-8")
+    (OUT / "lenochka.html").write_text(trip_index(days, venues, intro, after), encoding="utf-8")
     set_prefix("")
+
+    if after is not None:
+        (OUT / AFTER_HREF).write_text(trip_after_page(after), encoding="utf-8")
 
     for venue in venues:
         target = OUT / "lenochka" / (venue["slug"] + ".html")
