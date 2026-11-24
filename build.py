@@ -38,7 +38,7 @@ except ImportError:
     sys.exit("Missing dependency: pip install markdown")
 
 
-VAULT_PLACES = Path(r"D:\DataBases\mstr_obs_git\02-Projects\02-Sightseeing\Places")
+VAULT_PLACES = Path(r"D:\DataBases\mstr_obs_git\05-Archives\Sightseeing\Places")
 VAULT_TRIP = Path(r"D:\DataBases\mstr_obs_git\02-Projects\03-Lenochka-coming")
 TRIP_DAYS = VAULT_TRIP / "Days"
 TRIP_PLACES = VAULT_TRIP / "Places"
