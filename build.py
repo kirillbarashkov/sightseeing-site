@@ -1257,10 +1257,15 @@ FONTS_TRIP = (
     '&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">'
 )
 
+# Поездка снята с публикации 25.11.2026: материалы уехали в архив хранилища,
+# страницы не собираются, вкладка в меню не показывается. Вернуть — поставить True.
+TRIP_PRESENT = False
+
 NAV_ITEMS = (
     ("index.html", "Классные места", "places"),
-    ("lenochka.html", "Леночка приезжает", "trip"),
 )
+if TRIP_PRESENT:
+    NAV_ITEMS = NAV_ITEMS + (("lenochka.html", "Леночка приезжает", "trip"),)
 
 # Closing page «Как это было»: the note is parked (no #public) until the guest
 # sends her words and photos, so the build neither renders it nor links to it.
@@ -2087,7 +2092,7 @@ def main() -> int:
     # the published site.
     try:
         places, skipped = load_places()
-        days, venues = load_trip()
+        days, venues = load_trip() if TRIP_PRESENT else ([], [])
     except NoteError as exc:
         print("BUILD ABORTED -- nothing was written.")
         print("  ! " + str(exc))
@@ -2100,14 +2105,15 @@ def main() -> int:
     if not places:
         print("BUILD ABORTED -- no published places found.")
         return 2
-    if not days:
+    if TRIP_PRESENT and not days:
         print("BUILD ABORTED -- no published trip days found.")
         return 2
 
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "places").mkdir(parents=True)
-    (OUT / "lenochka").mkdir(parents=True)
+    if TRIP_PRESENT:
+        (OUT / "lenochka").mkdir(parents=True)
     (OUT / "assets").mkdir(parents=True)
 
     (OUT / "assets" / "style.css").write_text(STYLE, encoding="utf-8")
@@ -2143,6 +2149,16 @@ def main() -> int:
     for place in places:
         target = OUT / "places" / (place["slug"] + ".html")
         target.write_text(detail_page(place), encoding="utf-8")
+
+    if not TRIP_PRESENT:
+        print("Tab 2 -- trip: снята с публикации")
+        print("Output: " + str(OUT))
+        try:
+            import export_pdf
+            export_pdf.export_all(OUT)
+        except Exception as exc:
+            print("  ! PDF не напечатался: " + str(exc))
+        return 0
 
     # ---- tab 2: the trip ------------------------------------------------- #
     dedupe_slugs(days + venues)
