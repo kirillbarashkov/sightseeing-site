@@ -39,7 +39,8 @@ except ImportError:
 
 
 VAULT_PLACES = Path(r"D:\DataBases\mstr_obs_git\05-Archives\Sightseeing\Places")
-VAULT_TRIP = Path(r"D:\DataBases\mstr_obs_git\02-Projects\03-Lenochka-coming")
+# Поездка снята с публикации 25.11.2026: материалы в архиве хранилища.
+VAULT_TRIP = Path(r"D:\DataBases\mstr_obs_git\05-Archives\Lenochka-coming — поездка, ноябрь 2026")
 TRIP_DAYS = VAULT_TRIP / "Days"
 TRIP_PLACES = VAULT_TRIP / "Places"
 ROOT = Path(__file__).resolve().parent
